@@ -174,7 +174,6 @@ export const fetchAdminWhatsAppNumber = async (): Promise<string> => {
 // ----------------------------------------------------
 export const subscribeToChannels = (callback: (channels: Channel[]) => void): (() => void) => {
   if (isSupabaseConfigured && supabase) {
-    let checkedSeed = false;
     const fetchAndCallback = async () => {
       const { data, error } = await supabase
         .from('channels')
@@ -183,26 +182,7 @@ export const subscribeToChannels = (callback: (channels: Channel[]) => void): ((
       if (error) {
         console.error('Supabase fetch error for channels:', error);
       } else if (data) {
-        if (data.length === 0 && !checkedSeed) {
-          checkedSeed = true;
-          console.log("Empty Supabase database detected - triggering auto-seeding workflow...");
-          try {
-            await seedActiveBackendForcefully();
-            // Refetch after seeding
-            const refetched = await supabase
-              .from('channels')
-              .select('*')
-              .order('created_at', { ascending: false });
-            if (refetched.data && refetched.data.length > 0) {
-              callback(refetched.data.map(standardiseChannel));
-              return;
-            }
-          } catch (seedingError) {
-            console.error("Auto-seeding was blocked or failed:", seedingError);
-          }
-        }
-        const channelsList = data.length === 0 ? INITIAL_CHANNELS : data.map(standardiseChannel);
-        callback(channelsList);
+        callback(data.map(standardiseChannel));
       }
     };
     fetchAndCallback();
@@ -361,7 +341,6 @@ export const deleteChannelListing = async (id: string): Promise<void> => {
 // ----------------------------------------------------
 export const subscribeToTestimonials = (callback: (testimonials: Testimonial[]) => void): (() => void) => {
   if (isSupabaseConfigured && supabase) {
-    let checkedSeed = false;
     const fetchAndCallback = async () => {
       const { data, error } = await supabase
         .from('testimonials')
@@ -370,24 +349,7 @@ export const subscribeToTestimonials = (callback: (testimonials: Testimonial[]) 
       if (error) {
         console.error('Supabase testimonials fetch error:', error);
       } else if (data) {
-        if (data.length === 0 && !checkedSeed) {
-          checkedSeed = true;
-          try {
-            await seedActiveBackendForcefully();
-            const refetched = await supabase
-              .from('testimonials')
-              .select('*')
-              .order('created_at', { ascending: false });
-            if (refetched.data && refetched.data.length > 0) {
-              callback(refetched.data.map(standardiseTestimonial));
-              return;
-            }
-          } catch (e) {
-            console.error("Auto seeding from testimonials failed:", e);
-          }
-        }
-        const testimonialsList = data.length === 0 ? INITIAL_TESTIMONIALS : data.map(standardiseTestimonial);
-        callback(testimonialsList);
+        callback(data.map(standardiseTestimonial));
       }
     };
     fetchAndCallback();
@@ -470,7 +432,7 @@ export const subscribeToStats = (callback: (stats: HomepageStats) => void): (() 
       if (error) {
         console.error('Supabase stats calculation error:', error);
       } else if (data) {
-        const list = data.length === 0 ? INITIAL_CHANNELS : data.map(standardiseChannel);
+        const list = data.map(standardiseChannel);
         const totalListings = list.length;
         const soldChannels = list.filter(c => c.status === 'sold');
         const totalSold = soldChannels.length;

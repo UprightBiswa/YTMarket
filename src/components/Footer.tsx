@@ -1,10 +1,19 @@
 import { Facebook, Instagram, MessageSquare } from 'lucide-react';
+import { getSocialLinks } from '../lib/db';
+import { useState, useEffect } from 'react';
 
 interface FooterProps {
   setActiveTab: (tab: 'home' | 'browse' | 'sold' | 'admin') => void;
 }
 
 export default function Footer({ setActiveTab }: FooterProps) {
+  const [social, setSocial] = useState(getSocialLinks());
+
+  useEffect(() => {
+    const sync = () => setSocial(getSocialLinks());
+    window.addEventListener('storage', sync);
+    return () => window.removeEventListener('storage', sync);
+  }, []);
   return (
     <footer className="bg-gray-950 text-gray-400 font-sans border-t border-gray-900" id="main-footer">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -57,13 +66,13 @@ export default function Footer({ setActiveTab }: FooterProps) {
           <div className="space-y-3">
             <h4 className="text-white text-xs font-semibold tracking-wider uppercase font-mono">Social</h4>
             <div className="flex flex-col gap-2 text-xs font-medium">
-              <a href="https://www.instagram.com/buy.sellmarket" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors inline-flex items-center gap-2">
+              <a href={social.instagram} target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors inline-flex items-center gap-2">
                 <Instagram className="w-4 h-4" /> Instagram
               </a>
-              <a href="https://www.facebook.com/share/18dPe2V26i/" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors inline-flex items-center gap-2">
+              <a href={social.facebook} target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors inline-flex items-center gap-2">
                 <Facebook className="w-4 h-4" /> Facebook
               </a>
-              <a href="https://whatsapp.com/channel/0029VbD4kYR65yDJzTbS3B2e" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors inline-flex items-center gap-2">
+              <a href={social.whatsappChannel} target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors inline-flex items-center gap-2">
                 <MessageSquare className="w-4 h-4" /> WhatsApp Channel
               </a>
             </div>

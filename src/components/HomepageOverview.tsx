@@ -12,7 +12,6 @@ import {
   ArrowRight,
   Sparkles,
   Award,
-  X,
   Play,
   Globe
 } from 'lucide-react';
@@ -68,42 +67,8 @@ export default function HomepageOverview({
 }: HomepageOverviewProps) {
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
 
-  // Simple feedback form state
-  const [showFeedbackForm, setShowFeedbackForm] = useState(false);
-  const [feedbackName, setFeedbackName] = useState('');
-  const [feedbackRole, setFeedbackRole] = useState('Verified Buyer');
-  const [feedbackRating, setFeedbackRating] = useState(5);
-  const [feedbackReview, setFeedbackReview] = useState('');
-  const [feedbackSuccess, setFeedbackSuccess] = useState<string | null>(null);
-  const [feedbackLoading, setFeedbackLoading] = useState(false);
-
   const toggleFaq = (idx: number) => {
     setExpandedFaq(expandedFaq === idx ? null : idx);
-  };
-
-  const handleFeedbackSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!feedbackName || !feedbackReview) return;
-    setFeedbackLoading(true);
-    try {
-      if (onSubmitTestimonial) {
-        await onSubmitTestimonial({
-          name: feedbackName,
-          role: feedbackRole,
-          rating: feedbackRating,
-          review: feedbackReview
-        });
-        setFeedbackSuccess("Your recommendation has been submitted safely! Thank you!");
-        setFeedbackName('');
-        setFeedbackReview('');
-        setFeedbackRating(5);
-        setTimeout(() => setFeedbackSuccess(null), 5000);
-      }
-    } catch (err: any) {
-      console.error(err);
-    } finally {
-      setFeedbackLoading(false);
-    }
   };
 
   const formatSubscribers = (val: number) => {
@@ -131,7 +96,6 @@ export default function HomepageOverview({
     }
   ];
 
-  const happyCustomers = Math.max(testimonials.length + stats.totalSold, testimonials.length, 1);
   const activeListings = channels.filter(channel => channel.status === 'available').length;
 
   return (
@@ -186,57 +150,21 @@ export default function HomepageOverview({
 
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-4 font-sans" aria-label="Marketplace highlights">
         {[
-          { label: 'Happy Customers', value: happyCustomers, suffix: '+', tone: 'text-emerald-600', desc: 'Buyer and seller reviews' },
-          { label: 'Active Listings', value: activeListings, suffix: '', tone: 'text-blue-600', desc: 'Channels available now' },
-          { label: 'Completed Deals', value: stats.totalSold, suffix: '+', tone: 'text-red-600', desc: 'Sold records shown publicly' },
-          { label: 'Admin Support', value: 24, suffix: 'h', tone: 'text-slate-900', desc: 'Direct WhatsApp response flow' },
-        ].map((item) => (
-          <div key={item.label} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-xs">
-            <div className={`text-3xl font-black tracking-tight ${item.tone}`}>
-              <AnimatedNumber value={item.value} suffix={item.suffix} />
-            </div>
-            <div className="text-xs font-extrabold text-gray-900 uppercase tracking-wide mt-2">
-              {item.label}
-            </div>
-            <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
-              {item.desc}
-            </p>
-          </div>
-        ))}
-      </section>
-
-      {/* 2. Platform Real-Time Statistics */}
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-6 font-sans">
-        {[
-          { 
-            label: "ESTABLISHED PROJECTS", 
-            val: stats.totalListings, 
-            desc: "Channels active on Buy Sell Market", 
-            icon: <Tv className="w-5 h-5 text-blue-600" />,
-            bg: "bg-blue-50/50"
-          },
-          { 
-            label: "COMPLETED PORTFOLIOS", 
-            val: stats.totalSold, 
-            desc: "Completed channel listings", 
-            icon: <CheckCircle className="w-5 h-5 text-red-600" />,
-            bg: "bg-red-50/50"
-          }
-        ].map((item, idx) => (
-          <div key={idx} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-[10px] text-gray-400 font-mono font-bold uppercase tracking-wider">
-                {item.label}
-              </span>
-              <div className={`p-2.5 rounded-lg ${item.bg}`}>
-                {item.icon}
-              </div>
+          { label: 'Happy Customers', value: 100, suffix: '+', tone: 'text-emerald-600', desc: 'Verified buyer & seller reviews', icon: <Users className="w-5 h-5 text-emerald-500" /> },
+          { label: 'Active Listings', value: activeListings, suffix: '', tone: 'text-blue-600', desc: 'Channels available now', icon: <Tv className="w-5 h-5 text-blue-500" /> },
+          { label: 'Completed Deals', value: stats.totalSold, suffix: '+', tone: 'text-red-600', desc: 'Sold records shown publicly', icon: <CheckCircle className="w-5 h-5 text-red-500" /> },
+          { label: 'Admin Support', value: 24, suffix: 'h', tone: 'text-slate-900', desc: 'Direct WhatsApp response', icon: <Activity className="w-5 h-5 text-slate-500" /> },
+        ].map((item, i) => (
+          <div key={item.label} className="animate-fade-up bg-white border border-gray-100 rounded-2xl p-5 shadow-xs flex flex-col gap-3" style={{ animationDelay: `${i * 80}ms` }}>
+            <div className="w-9 h-9 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center">
+              {item.icon}
             </div>
             <div>
-              <strong className="block text-3xl font-black text-gray-950 font-sans tracking-tight leading-none">
-                {item.val}
-              </strong>
-              <p className="text-xs text-gray-400 font-sans mt-1">{item.desc}</p>
+              <div className={`text-3xl font-black tracking-tight ${item.tone}`}>
+                <AnimatedNumber value={item.value} suffix={item.suffix} />
+              </div>
+              <div className="text-xs font-extrabold text-gray-900 uppercase tracking-wide mt-1">{item.label}</div>
+              <p className="text-[11px] text-gray-500 mt-0.5 leading-relaxed">{item.desc}</p>
             </div>
           </div>
         ))}
@@ -509,7 +437,7 @@ export default function HomepageOverview({
 
       {/* 5. Client Testimonials */}
       {testimonials.length > 0 && (
-        <section className="space-y-6">
+        <section className="space-y-6 overflow-hidden">
           <div className="text-center max-w-xl mx-auto">
             <span className="text-[10px] font-bold bg-blue-100 text-blue-800 px-2.5 py-1 rounded-full uppercase tracking-wider font-mono">
               Broker Credibility
@@ -522,139 +450,55 @@ export default function HomepageOverview({
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {testimonials.map((testi) => (
-              <div key={testi.id} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-4 flex flex-col justify-between">
-                <div>
-                  <div className="flex text-amber-500 gap-0.5">
-                    {Array.from({ length: testi.rating }).map((_, i) => (
-                      <span key={i} className="text-sm">★</span>
-                    ))}
-                  </div>
-                  <p className="text-xs italic text-gray-600 leading-relaxed font-sans mt-3">
-                    &ldquo;{testi.review}&rdquo;
-                  </p>
-                </div>
-                
-                <div className="pt-4 border-t border-gray-50 flex items-center justify-between">
-                  <span className="font-sans font-bold text-xs text-gray-900">{testi.name}</span>
-                  <span className="text-[10px] text-blue-600 font-mono font-bold uppercase bg-blue-50 px-2 py-0.5 rounded">
-                    {testi.role || "Verified Customer"}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Handlers and Form for submitting digital comments & rating recommendations */}
-          <div className="hidden flex-col items-center pt-2 gap-4">
-            {!showFeedbackForm ? (
-              <button
-                onClick={() => setShowFeedbackForm(true)}
-                className="px-6 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 text-xs font-bold font-mono rounded-xl transition-all cursor-pointer flex items-center gap-1.5 focus:outline-hidden"
-                id="show-feedback-form-cta"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                Upload Review or Testimonial
-              </button>
-            ) : (
-              <div className="w-full max-w-xl bg-white p-6 rounded-2xl border border-gray-200/80 shadow-md space-y-4 text-left animate-fade-in" id="feedback-form-container">
-                <div className="flex justify-between items-start">
+          {/* Row 1: left scroll */}
+          <div className="relative overflow-hidden">
+            <div className="flex gap-4 animate-marquee-left w-max">
+              {[...testimonials, ...testimonials].map((testi, i) => (
+                <div key={`l-${i}`} className="w-72 shrink-0 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-3 flex flex-col justify-between">
                   <div>
-                    <h4 className="text-sm font-bold text-gray-900 font-sans">Submit Brokerage Review</h4>
-                    <p className="text-[10px] text-gray-500 mt-0.5 font-sans">Share your digital asset acquisition story with the community.</p>
+                    <div className="flex text-amber-400 gap-0.5 text-sm">
+                      {'★'.repeat(testi.rating)}{'☆'.repeat(5 - testi.rating)}
+                    </div>
+                    <p className="text-xs italic text-gray-600 leading-relaxed font-sans mt-2 line-clamp-2">
+                      &ldquo;{testi.review}&rdquo;
+                    </p>
                   </div>
-                  <button 
-                    onClick={() => setShowFeedbackForm(false)}
-                    className="p-1 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600 cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
+                  <div className="pt-3 border-t border-gray-50 flex items-center justify-between">
+                    <span className="font-sans font-bold text-xs text-gray-900">{testi.name}</span>
+                    <span className="text-[10px] text-blue-600 font-mono font-bold uppercase bg-blue-50 px-2 py-0.5 rounded">
+                      {testi.role || 'Verified Customer'}
+                    </span>
+                  </div>
                 </div>
-
-                {feedbackSuccess ? (
-                  <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-xl text-xs font-sans text-center">
-                    {feedbackSuccess}
-                  </div>
-                ) : (
-                  <form onSubmit={handleFeedbackSubmit} className="space-y-3 font-sans">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[10px] font-bold text-gray-600 uppercase font-mono mb-1">Your Full Name</label>
-                        <input 
-                          type="text" 
-                          required
-                          value={feedbackName}
-                          onChange={(e) => setFeedbackName(e.target.value)}
-                          placeholder="Alex Mercer"
-                          className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-blue-500 bg-gray-50/35 font-sans"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-gray-600 uppercase font-mono mb-1">Your Role</label>
-                        <select
-                          value={feedbackRole}
-                          onChange={(e) => setFeedbackRole(e.target.value)}
-                          className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-blue-500 bg-gray-50/35 font-sans font-medium"
-                        >
-                          <option value="Verified Buyer">Verified Buyer</option>
-                          <option value="Verified Seller">Verified Seller</option>
-                          <option value="Registered Broker">Registered Broker</option>
-                          <option value="Guest Acquirer">Guest Acquirer</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-600 uppercase font-mono mb-1">Satisfaction Rating</label>
-                      <div className="flex gap-1.5 items-center">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <button
-                            key={star}
-                            type="button"
-                            onClick={() => setFeedbackRating(star)}
-                            className="text-lg transition-transform hover:scale-110 focus:outline-hidden cursor-pointer"
-                          >
-                            {star <= feedbackRating ? '★' : '☆'}
-                          </button>
-                        ))}
-                        <span className="text-[10px] text-gray-400 font-mono ml-2">({feedbackRating} / 5 stars)</span>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-600 uppercase font-mono mb-1">Detailed Review</label>
-                      <textarea
-                        required
-                        value={feedbackReview}
-                        onChange={(e) => setFeedbackReview(e.target.value)}
-                        placeholder="I successfully bought a verified tech channel with 120k subscribers inside 4 days. Safe ownership transfer, excellent administrator liaison..."
-                        rows={3}
-                        className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-blue-500 bg-gray-50/35 font-sans"
-                      />
-                    </div>
-
-                    <div className="flex justify-end gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => setShowFeedbackForm(false)}
-                        className="px-4 py-1.5 border border-gray-200 text-xs font-semibold rounded-lg text-gray-500 hover:bg-gray-50 cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={feedbackLoading}
-                        className="px-5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg disabled:opacity-50 flex items-center gap-1 cursor-pointer"
-                      >
-                        {feedbackLoading ? "Publishing..." : "Submit Review"}
-                      </button>
-                    </div>
-                  </form>
-                )}
-              </div>
-            )}
+              ))}
+            </div>
           </div>
+
+          {/* Row 2: right scroll */}
+          {testimonials.length > 1 && (
+            <div className="relative overflow-hidden">
+              <div className="flex gap-4 animate-marquee-right w-max">
+                {[...testimonials, ...testimonials].reverse().map((testi, i) => (
+                  <div key={`r-${i}`} className="w-72 shrink-0 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-3 flex flex-col justify-between">
+                    <div>
+                      <div className="flex text-amber-400 gap-0.5 text-sm">
+                        {'★'.repeat(testi.rating)}{'☆'.repeat(5 - testi.rating)}
+                      </div>
+                      <p className="text-xs italic text-gray-600 leading-relaxed font-sans mt-2 line-clamp-2">
+                        &ldquo;{testi.review}&rdquo;
+                      </p>
+                    </div>
+                    <div className="pt-3 border-t border-gray-50 flex items-center justify-between">
+                      <span className="font-sans font-bold text-xs text-gray-900">{testi.name}</span>
+                      <span className="text-[10px] text-blue-600 font-mono font-bold uppercase bg-blue-50 px-2 py-0.5 rounded">
+                        {testi.role || 'Verified Customer'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
       )}
 

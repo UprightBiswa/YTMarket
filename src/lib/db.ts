@@ -225,6 +225,31 @@ export const setAdminWhatsAppNumber = (num: string): void => {
   window.dispatchEvent(new Event("storage"));
 };
 
+export interface SocialLinks {
+  instagram: string;
+  facebook: string;
+  whatsappChannel: string;
+}
+
+const DEFAULT_SOCIAL_LINKS: SocialLinks = {
+  instagram: 'https://www.instagram.com/buy.sellmarket',
+  facebook: 'https://www.facebook.com/share/18dPe2V26i/',
+  whatsappChannel: 'https://whatsapp.com/channel/0029VbD4kYR65yDJzTbS3B2e',
+};
+
+export const getSocialLinks = (): SocialLinks => {
+  const stored = localStorage.getItem("yt_social_links");
+  if (stored) {
+    try { return { ...DEFAULT_SOCIAL_LINKS, ...JSON.parse(stored) }; } catch {}
+  }
+  return DEFAULT_SOCIAL_LINKS;
+};
+
+export const saveSocialLinks = (links: SocialLinks): void => {
+  localStorage.setItem("yt_social_links", JSON.stringify(links));
+  window.dispatchEvent(new Event("storage"));
+};
+
 export const addChannelListing = async (channel: Omit<Channel, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
   const newId = `channel-${Date.now()}`;
   

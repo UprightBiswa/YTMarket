@@ -12,6 +12,8 @@ import {
   logoutUser,
   getAdminWhatsAppNumber,
   setAdminWhatsAppNumber,
+  getSocialLinks,
+  saveSocialLinks,
 } from '../lib/db';
 import { NICHES } from '../lib/mockData';
 
@@ -39,7 +41,11 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
   const [notification, setNotification] = useState<string | null>(null);
 
   const [globalWhatsAppNumber, setGlobalWhatsAppNumber] = useState(getAdminWhatsAppNumber());
+  const [savingWhatsApp, setSavingWhatsApp] = useState(false);
+  const [socialLinks, setSocialLinksState] = useState(getSocialLinks());
+  const [savingSocial, setSavingSocial] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [saveLoading, setSaveLoading] = useState(false);
   const [title, setTitle] = useState('');
   const [niche, setNiche] = useState(NICHES[0]);
   const [youtubeUrl, setYoutubeUrl] = useState('');
@@ -58,6 +64,8 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
   const [testimonialRole, setTestimonialRole] = useState('Verified Customer');
   const [testimonialRating, setTestimonialRating] = useState(5);
   const [testimonialReview, setTestimonialReview] = useState('');
+  const [testimonialLoading, setTestimonialLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const pageSize = 6;
 
   const sortedChannels = useMemo(
@@ -171,6 +179,7 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
       soldDate: status === 'sold' ? new Date().toISOString().split('T')[0] : undefined,
     };
 
+    setSaveLoading(true);
     try {
       if (editingId) {
         await updateChannelListing(editingId, payload);
@@ -182,18 +191,23 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
       resetChannelForm();
       setChannelPage(1);
     } catch (error: any) {
-      showNotice(`Database write rejected: ${error?.message || 'check Supabase RLS/Auth setup'}`);
+      showNotice(`Save failed: ${error?.message || 'Check permissions'}`);
+    } finally {
+      setSaveLoading(false);
     }
   };
 
   const removeChannel = async (id: string) => {
     if (!window.confirm('Delete this channel listing?')) return;
+    setDeletingId(id);
     try {
       await deleteChannelListing(id);
       setChannelPage(1);
       showNotice('Channel deleted.');
     } catch (error: any) {
-      showNotice(`Delete failed: ${error?.message || 'check Supabase permissions'}`);
+      showNotice(`Delete failed: ${error?.message || 'Check permissions'}`);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -203,7 +217,7 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
       showNotice('Please add customer name and review.');
       return;
     }
-
+    setTestimonialLoading(true);
     try {
       await addTestimonialListing({
         name: testimonialName.trim(),
@@ -216,18 +230,23 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
       setTestimonialPage(1);
       showNotice('Testimonial added.');
     } catch (error: any) {
-      showNotice(`Review write failed: ${error?.message || 'check Supabase permissions'}`);
+      showNotice(`Review write failed: ${error?.message || 'Check permissions'}`);
+    } finally {
+      setTestimonialLoading(false);
     }
   };
 
   const removeTestimonial = async (id: string) => {
     if (!window.confirm('Delete this testimonial?')) return;
+    setDeletingId(id);
     try {
       await deleteTestimonialListing(id);
       setTestimonialPage(1);
       showNotice('Testimonial deleted.');
     } catch (error: any) {
-      showNotice(`Delete failed: ${error?.message || 'check Supabase permissions'}`);
+      showNotice(`Delete failed: ${error?.message || 'Check permissions'}`);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -240,21 +259,22 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
           </div>
           <h2 className="font-sans font-black text-xl text-gray-900 tracking-tight">Admin Login</h2>
           <p className="text-xs text-gray-500 font-sans max-w-xs mx-auto">
-            Sign in with the admin account created in Supabase Auth.
+            Sign in with your administrator account.
           </p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-gray-600 uppercase tracking-wider font-mono">Email</label>
-            <input type="email" required value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} placeholder="djdas000000@gmail.com" className={inputClass} />
+            <input type="email" required value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} placeholder="Enter your admin email" className={inputClass} />
           </div>
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-gray-600 uppercase tracking-wider font-mono">Password</label>
-            <input type="password" required value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} placeholder="Password from Supabase Auth" className={inputClass} />
+            <input type="password" required value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} placeholder="Enter your password" className={inputClass} />
           </div>
           {authError && <div className="text-[11px] text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-200 font-sans font-semibold">{authError}</div>}
-          <button type="submit" disabled={authLoading} className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all font-mono shadow-md cursor-pointer disabled:opacity-50">
+          <button type="submit" disabled={authLoading} className="w-full py-3 bg-red-600 hover:bg-red-700 active:scale-95 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all font-mono shadow-md cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2">
+            {authLoading && <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
             {authLoading ? 'Signing in...' : 'Login'}
           </button>
         </form>
@@ -297,9 +317,48 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
           <p className="text-xs text-gray-500 mt-1">All listing inquiry buttons send users to this number.</p>
         </div>
         <div className="flex gap-2">
-          <input value={globalWhatsAppNumber} onChange={(e) => setGlobalWhatsAppNumber(e.target.value)} className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-mono font-bold w-full sm:w-48 outline-none focus:border-red-500" />
-          <button onClick={() => { setAdminWhatsAppNumber(globalWhatsAppNumber); showNotice('WhatsApp number saved.'); }} className="px-4 py-2 bg-gray-950 hover:bg-gray-800 text-white rounded-xl text-xs font-bold">
+          <input value={globalWhatsAppNumber} onChange={(e) => setGlobalWhatsAppNumber(e.target.value)} className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-mono font-bold text-gray-900 w-full sm:w-48 outline-none focus:border-red-500" />
+          <button
+            disabled={savingWhatsApp}
+            onClick={async () => { setSavingWhatsApp(true); setAdminWhatsAppNumber(globalWhatsAppNumber); showNotice('WhatsApp number saved.'); setSavingWhatsApp(false); }}
+            className="px-4 py-2 bg-gray-950 hover:bg-gray-800 active:scale-95 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 disabled:opacity-60"
+          >
+            {savingWhatsApp && <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
             Save
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-4">
+        <div>
+          <h3 className="font-bold text-sm text-gray-900">Social Media Links</h3>
+          <p className="text-xs text-gray-500 mt-1">These appear in the site footer for all visitors.</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {([
+            { key: 'instagram', label: 'Instagram URL' },
+            { key: 'facebook', label: 'Facebook URL' },
+            { key: 'whatsappChannel', label: 'WhatsApp Channel URL' },
+          ] as const).map(({ key, label }) => (
+            <div key={key} className="space-y-1">
+              <label className="text-[10px] font-bold text-gray-500 uppercase font-mono">{label}</label>
+              <input
+                value={socialLinks[key]}
+                onChange={(e) => setSocialLinksState(prev => ({ ...prev, [key]: e.target.value }))}
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-mono text-gray-900 outline-none focus:border-red-500"
+                placeholder={`https://...`}
+              />
+            </div>
+          ))}
+        </div>
+        <div className="flex justify-end">
+          <button
+            disabled={savingSocial}
+            onClick={async () => { setSavingSocial(true); saveSocialLinks(socialLinks); showNotice('Social links saved.'); setSavingSocial(false); }}
+            className="px-4 py-2 bg-gray-950 hover:bg-gray-800 active:scale-95 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 disabled:opacity-60"
+          >
+            {savingSocial && <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
+            Save Social Links
           </button>
         </div>
       </div>
@@ -345,9 +404,10 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
                 </select>
               </div>
               <div className="flex gap-2">
-                {editingId && <button type="button" onClick={resetChannelForm} className="flex-1 py-3 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl text-xs font-bold">Cancel</button>}
-                <button type="submit" className="flex-1 py-3 bg-blue-600 text-white hover:bg-blue-700 rounded-xl flex items-center justify-center gap-1 text-xs font-bold">
-                  <Save className="w-4 h-4" /> Save Listing
+                {editingId && <button type="button" onClick={resetChannelForm} className="flex-1 py-3 bg-gray-100 text-gray-700 hover:bg-gray-200 active:scale-95 rounded-xl text-xs font-bold transition-all">Cancel</button>}
+                <button type="submit" disabled={saveLoading} className="flex-1 py-3 bg-blue-600 text-white hover:bg-blue-700 active:scale-95 rounded-xl flex items-center justify-center gap-1.5 text-xs font-bold transition-all disabled:opacity-60">
+                  {saveLoading ? <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <Save className="w-4 h-4" />}
+                  {saveLoading ? (editingId ? 'Updating...' : 'Creating...') : 'Save Listing'}
                 </button>
               </div>
             </form>
@@ -377,9 +437,11 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
                     </div>
                   </div>
                   <div className="flex items-center space-x-1.5 shrink-0 self-end sm:self-auto">
-                    <button onClick={() => onSelectChannel(channel)} className="p-2 border border-gray-200 hover:border-emerald-300 hover:text-emerald-600 rounded-lg bg-white" title="View details"><Eye className="w-4 h-4" /></button>
-                    <button onClick={() => editChannel(channel)} className="p-2 border border-gray-200 hover:border-blue-300 hover:text-blue-600 rounded-lg bg-white" title="Edit listing"><Edit className="w-4 h-4" /></button>
-                    <button onClick={() => removeChannel(channel.id)} className="p-2 border border-gray-200 hover:border-red-300 hover:text-red-600 rounded-lg bg-white" title="Delete listing"><Trash2 className="w-4 h-4" /></button>
+                    <button onClick={() => onSelectChannel(channel)} className="p-2 border border-gray-200 hover:border-emerald-300 hover:text-emerald-600 active:scale-90 rounded-lg bg-white transition-all" title="View details"><Eye className="w-4 h-4" /></button>
+                    <button onClick={() => editChannel(channel)} className="p-2 border border-gray-200 hover:border-blue-300 hover:text-blue-600 active:scale-90 rounded-lg bg-white transition-all" title="Edit listing"><Edit className="w-4 h-4" /></button>
+                    <button onClick={() => removeChannel(channel.id)} disabled={deletingId === channel.id} className="p-2 border border-gray-200 hover:border-red-300 hover:text-red-600 active:scale-90 rounded-lg bg-white transition-all disabled:opacity-50" title="Delete listing">
+                      {deletingId === channel.id ? <span className="w-4 h-4 border-2 border-red-300 border-t-red-600 rounded-full animate-spin block" /> : <Trash2 className="w-4 h-4" />}
+                    </button>
                   </div>
                 </div>
               ))}
@@ -420,8 +482,9 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
               <label className="block space-y-1">Role<input value={testimonialRole} onChange={(e) => setTestimonialRole(e.target.value)} className={inputClass} /></label>
               <label className="block space-y-1">Rating<select value={testimonialRating} onChange={(e) => setTestimonialRating(Number(e.target.value))} className={inputClass}><option value={5}>5 Stars</option><option value={4}>4 Stars</option><option value={3}>3 Stars</option></select></label>
               <label className="block space-y-1">Review<textarea rows={4} value={testimonialReview} onChange={(e) => setTestimonialReview(e.target.value)} className={inputClass} /></label>
-              <button type="submit" className="w-full py-3 bg-blue-600 text-white font-bold hover:bg-blue-700 rounded-xl flex items-center justify-center gap-1.5">
-                <MessageSquare className="w-4 h-4" /> Add Testimonial
+              <button type="submit" disabled={testimonialLoading} className="w-full py-3 bg-blue-600 text-white font-bold hover:bg-blue-700 active:scale-95 rounded-xl flex items-center justify-center gap-1.5 transition-all disabled:opacity-60">
+                {testimonialLoading ? <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <MessageSquare className="w-4 h-4" />}
+                {testimonialLoading ? 'Adding...' : 'Add Testimonial'}
               </button>
             </form>
           </div>
@@ -440,8 +503,8 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
                     <h4 className="font-sans font-bold text-sm text-gray-900 mt-1">{testimonial.name}</h4>
                     <p className="text-xs text-gray-500 font-sans mt-1 line-clamp-2">{testimonial.review}</p>
                   </div>
-                  <button onClick={() => removeTestimonial(testimonial.id)} className="p-2 border border-gray-200 hover:border-red-300 hover:text-red-600 rounded-lg bg-white shrink-0" title="Remove testimonial">
-                    <Trash2 className="w-4 h-4" />
+                  <button onClick={() => removeTestimonial(testimonial.id)} disabled={deletingId === testimonial.id} className="p-2 border border-gray-200 hover:border-red-300 hover:text-red-600 active:scale-90 rounded-lg bg-white shrink-0 transition-all disabled:opacity-50" title="Remove testimonial">
+                    {deletingId === testimonial.id ? <span className="w-4 h-4 border-2 border-red-300 border-t-red-600 rounded-full animate-spin block" /> : <Trash2 className="w-4 h-4" />}
                   </button>
                 </div>
               ))}

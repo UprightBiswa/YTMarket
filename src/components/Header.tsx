@@ -3,8 +3,7 @@ import { User } from '../types';
 import { 
   LogOut, 
   Menu, 
-  X,
-  RefreshCw
+  X
 } from 'lucide-react';
 import { logoutUser, checkIsAdminUser } from '../lib/db';
 
@@ -35,9 +34,8 @@ export default function Header({ user, activeTab, setActiveTab, onNavigateWithFi
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center space-x-2.5 cursor-pointer" onClick={() => setActiveTab('home')}>
-            <div className="relative w-9 h-9 flex items-center justify-center bg-gray-50 rounded-xl border border-gray-100/80">
-              <RefreshCw className="w-5 h-5 text-emerald-600 animate-spin-slow absolute" />
-              <span className="font-sans font-black text-xs text-blue-600 relative z-10 font-bold">BS</span>
+            <div className="relative w-9 h-9 flex items-center justify-center rounded-xl overflow-hidden border border-gray-100/80">
+              <img src="/logo.jpeg" alt="Buy Sell Market Logo" className="w-full h-full object-cover" />
             </div>
             <div>
               <span className="font-sans font-black text-lg tracking-tight text-gray-900 uppercase flex items-center">

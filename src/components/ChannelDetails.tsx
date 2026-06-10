@@ -169,7 +169,7 @@ export default function ChannelDetails({ channel, onClose }: ChannelDetailsProps
                 </div>
                 <h2 className="font-sans font-black text-2xl tracking-tight text-gray-900 mt-2 flex items-center gap-2">
                   {channel.title}
-                  <CheckCircle2 className="w-5 h-5 text-blue-600 shrink-0" title="Verifiable analytics" />
+                  <CheckCircle2 className="w-5 h-5 text-blue-600 shrink-0" aria-label="Verifiable analytics" />
                 </h2>
                 <div className="text-[11px] text-gray-400 font-mono flex gap-4">
                   <span>Listed: {listingDate}</span>

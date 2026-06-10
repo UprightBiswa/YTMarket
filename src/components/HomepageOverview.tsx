@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react';
+import { useEffect, useState, FormEvent } from 'react';
 import { 
   ShieldCheck, 
   Tv, 
@@ -31,6 +31,31 @@ interface HomepageOverviewProps {
   favoriteNiches?: string[];
   onSubmitTestimonial?: (testi: { name: string; review: string; rating: number; role: string }) => Promise<any>;
   onNavigateWithFilters?: (monetized: 'all' | 'monetized' | 'non-monetized', isShortsOnly: boolean) => void;
+}
+
+function AnimatedNumber({ value, suffix = '' }: { value: number; suffix?: string }) {
+  const [displayValue, setDisplayValue] = useState(0);
+
+  useEffect(() => {
+    const target = Math.max(0, value);
+    const duration = 900;
+    const startedAt = performance.now();
+    let frame = 0;
+
+    const tick = (now: number) => {
+      const progress = Math.min((now - startedAt) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplayValue(Math.round(target * eased));
+      if (progress < 1) {
+        frame = requestAnimationFrame(tick);
+      }
+    };
+
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [value]);
+
+  return <>{displayValue.toLocaleString('en-IN')}{suffix}</>;
 }
 
 export default function HomepageOverview({ 
@@ -112,6 +137,9 @@ export default function HomepageOverview({
     }
   ];
 
+  const happyCustomers = Math.max(testimonials.length + stats.totalSold, testimonials.length, 1);
+  const activeListings = channels.filter(channel => channel.status === 'available').length;
+
   return (
     <div className="space-y-16 py-4" id="homepage-root">
       
@@ -160,6 +188,27 @@ export default function HomepageOverview({
             </button>
           </div>
         </div>
+      </section>
+
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-4 font-sans" aria-label="Marketplace highlights">
+        {[
+          { label: 'Happy Customers', value: happyCustomers, suffix: '+', tone: 'text-emerald-600', desc: 'Buyer and seller reviews' },
+          { label: 'Active Listings', value: activeListings, suffix: '', tone: 'text-blue-600', desc: 'Channels available now' },
+          { label: 'Completed Deals', value: stats.totalSold, suffix: '+', tone: 'text-red-600', desc: 'Sold records shown publicly' },
+          { label: 'Admin Support', value: 24, suffix: 'h', tone: 'text-slate-900', desc: 'Direct WhatsApp response flow' },
+        ].map((item) => (
+          <div key={item.label} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-xs">
+            <div className={`text-3xl font-black tracking-tight ${item.tone}`}>
+              <AnimatedNumber value={item.value} suffix={item.suffix} />
+            </div>
+            <div className="text-xs font-extrabold text-gray-900 uppercase tracking-wide mt-2">
+              {item.label}
+            </div>
+            <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+              {item.desc}
+            </p>
+          </div>
+        ))}
       </section>
 
       {/* 2. Platform Real-Time Statistics */}

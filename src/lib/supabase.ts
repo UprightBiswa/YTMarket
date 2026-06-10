@@ -86,9 +86,20 @@ CREATE TABLE IF NOT EXISTS public.app_settings (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
-INSERT INTO public.app_settings (id, whatsapp_number)
-VALUES (1, '+919144534891')
-ON CONFLICT (id) DO NOTHING;
+INSERT INTO public.app_settings (id, whatsapp_number, whatsapp_channel_url, instagram_url, facebook_url)
+VALUES (
+    1,
+    '+919144534891',
+    'https://whatsapp.com/channel/0029VbD4kYR65yDJzTbS3B2e',
+    'https://www.instagram.com/buy.sellmarket',
+    'https://www.facebook.com/share/18dPe2V26i/'
+)
+ON CONFLICT (id) DO UPDATE SET
+    whatsapp_number = EXCLUDED.whatsapp_number,
+    whatsapp_channel_url = EXCLUDED.whatsapp_channel_url,
+    instagram_url = EXCLUDED.instagram_url,
+    facebook_url = EXCLUDED.facebook_url,
+    updated_at = timezone('utc'::text, now());
 
 -- 3. Channel listings.
 CREATE TABLE IF NOT EXISTS public.channels (

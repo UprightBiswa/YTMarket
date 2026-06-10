@@ -437,10 +437,10 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
                     </div>
                   </div>
                   <div className="flex items-center space-x-1.5 shrink-0 self-end sm:self-auto">
-                    <button onClick={() => onSelectChannel(channel)} className="p-2 border border-gray-200 hover:border-emerald-300 hover:text-emerald-600 active:scale-90 rounded-lg bg-white transition-all" title="View details"><Eye className="w-4 h-4" /></button>
-                    <button onClick={() => editChannel(channel)} className="p-2 border border-gray-200 hover:border-blue-300 hover:text-blue-600 active:scale-90 rounded-lg bg-white transition-all" title="Edit listing"><Edit className="w-4 h-4" /></button>
-                    <button onClick={() => removeChannel(channel.id)} disabled={deletingId === channel.id} className="p-2 border border-gray-200 hover:border-red-300 hover:text-red-600 active:scale-90 rounded-lg bg-white transition-all disabled:opacity-50" title="Delete listing">
-                      {deletingId === channel.id ? <span className="w-4 h-4 border-2 border-red-300 border-t-red-600 rounded-full animate-spin block" /> : <Trash2 className="w-4 h-4" />}
+                    <button onClick={() => onSelectChannel(channel)} className="p-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 active:scale-90 rounded-lg transition-all" title="View details"><Eye className="w-4 h-4" /></button>
+                    <button onClick={() => editChannel(channel)} className="p-2 bg-blue-100 hover:bg-blue-200 text-blue-700 active:scale-90 rounded-lg transition-all" title="Edit listing"><Edit className="w-4 h-4" /></button>
+                    <button onClick={() => removeChannel(channel.id)} disabled={deletingId === channel.id} className="p-2 bg-red-100 hover:bg-red-200 text-red-700 active:scale-90 rounded-lg transition-all disabled:opacity-50" title="Delete listing">
+                      {deletingId === channel.id ? <span className="w-4 h-4 border-2 border-red-400 border-t-red-700 rounded-full animate-spin block" /> : <Trash2 className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
@@ -503,8 +503,8 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
                     <h4 className="font-sans font-bold text-sm text-gray-900 mt-1">{testimonial.name}</h4>
                     <p className="text-xs text-gray-500 font-sans mt-1 line-clamp-2">{testimonial.review}</p>
                   </div>
-                  <button onClick={() => removeTestimonial(testimonial.id)} disabled={deletingId === testimonial.id} className="p-2 border border-gray-200 hover:border-red-300 hover:text-red-600 active:scale-90 rounded-lg bg-white shrink-0 transition-all disabled:opacity-50" title="Remove testimonial">
-                    {deletingId === testimonial.id ? <span className="w-4 h-4 border-2 border-red-300 border-t-red-600 rounded-full animate-spin block" /> : <Trash2 className="w-4 h-4" />}
+                  <button onClick={() => removeTestimonial(testimonial.id)} disabled={deletingId === testimonial.id} className="p-2 bg-red-100 hover:bg-red-200 text-red-700 active:scale-90 rounded-lg shrink-0 transition-all disabled:opacity-50" title="Remove testimonial">
+                    {deletingId === testimonial.id ? <span className="w-4 h-4 border-2 border-red-400 border-t-red-700 rounded-full animate-spin block" /> : <Trash2 className="w-4 h-4" />}
                   </button>
                 </div>
               ))}

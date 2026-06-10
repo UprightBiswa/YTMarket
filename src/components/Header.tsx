@@ -33,16 +33,8 @@ export default function Header({ user, activeTab, setActiveTab, onNavigateWithFi
     <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-sm" id="main-header">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          <div className="flex items-center space-x-2.5 cursor-pointer" onClick={() => setActiveTab('home')}>
-            <div className="relative w-9 h-9 flex items-center justify-center rounded-xl overflow-hidden border border-gray-100/80">
-              <img src="/logo.jpeg" alt="Buy Sell Market Logo" className="w-full h-full object-cover" />
-            </div>
-            <div>
-              <span className="font-sans font-black text-lg tracking-tight text-gray-900 uppercase flex items-center">
-                Buy Sell <span className="text-emerald-600 ml-1">Market</span>
-              </span>
-              <p className="text-[9px] text-gray-400 font-mono -mt-1 font-bold tracking-wider">VERIFIED CHANNELS</p>
-            </div>
+          <div className="flex items-center cursor-pointer" onClick={() => setActiveTab('home')}>
+            <img src="/logo.jpeg" alt="Buy Sell Market Logo" className="h-12 w-auto object-contain" />
           </div>
 
           {/* Desktop Navigation */}

@@ -1,0 +1,6 @@
+{
+  "name": "YTMarket",
+  "description": "A premium marketplace to buy and sell verified YouTube channels, complete with statistics, customer testimonials, and an admin dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

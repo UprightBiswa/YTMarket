@@ -1,22 +1,13 @@
 import { Channel, Testimonial, HomepageStats, User } from '../types';
-import { INITIAL_CHANNELS, INITIAL_TESTIMONIALS, INITIAL_STATS } from './mockData';
 import { supabase, isSupabaseConfigured, standardiseChannel, standardiseTestimonial } from './supabase';
 
-// Helpers for localStorage state
-const getLocalData = <T>(key: string, fallback: T): T => {
-  const item = localStorage.getItem(key);
-  if (!item) return fallback;
-  try { return JSON.parse(item) as T; } catch { return fallback; }
-};
-
-const setLocalData = <T>(key: string, value: T): void => {
-  localStorage.setItem(key, JSON.stringify(value));
-};
-
-export const isLocalStorageFallback = !isSupabaseConfigured;
+// Only localStorage keys used:
+//   yt_admin_session  — logged-in admin user object (auth only)
+//   yt_admin_whatsapp — cached whatsapp number from app_settings
+//   yt_social_links   — cached social links from app_settings
 
 // ----------------------------------------------------
-// IN-MEMORY SUBSCRIBER REGISTRIES (instant UI update)
+// IN-MEMORY SUBSCRIBER REGISTRIES
 // ----------------------------------------------------
 type ChannelCallback = (channels: Channel[]) => void;
 type TestimonialCallback = (testimonials: Testimonial[]) => void;
@@ -30,29 +21,49 @@ const pushChannels = (list: Channel[]) => channelSubscribers.forEach(cb => cb(li
 const pushTestimonials = (list: Testimonial[]) => testimonialSubscribers.forEach(cb => cb(list));
 const pushStats = (s: HomepageStats) => statsSubscribers.forEach(cb => cb(s));
 
+const emptyStats = (): HomepageStats => ({
+  totalListings: 0, totalSold: 0, totalSubscribersSold: 0, totalMarketplaceValue: 0,
+});
+
 const fetchAndPushChannels = async () => {
-  if (isSupabaseConfigured && supabase) {
-    const { data, error } = await supabase.from('channels').select('*').order('created_at', { ascending: false });
-    if (!error && data) {
-      const list = data.map(standardiseChannel);
-      pushChannels(list);
-      // recalculate stats inline
-      const sold = list.filter(c => c.status === 'sold');
-      pushStats({
-        totalListings: list.length,
-        totalSold: sold.length,
-        totalSubscribersSold: sold.reduce((s, c) => s + c.subscribers, 0),
-        totalMarketplaceValue: list.reduce((s, c) => s + (c.status === 'sold' ? (c.soldPrice || c.price) : c.price), 0),
-      });
-    }
+  if (!isSupabaseConfigured || !supabase) {
+    pushChannels([]);
+    pushStats(emptyStats());
+    return;
   }
+  const { data, error } = await supabase
+    .from('channels')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) {
+    console.error('[db] fetchChannels error:', error.message);
+    return;
+  }
+  const list = (data ?? []).map(standardiseChannel);
+  pushChannels(list);
+  const sold = list.filter(c => c.status === 'sold');
+  pushStats({
+    totalListings: list.length,
+    totalSold: sold.length,
+    totalSubscribersSold: sold.reduce((s, c) => s + c.subscribers, 0),
+    totalMarketplaceValue: list.reduce((s, c) => s + (c.status === 'sold' ? (c.soldPrice || c.price) : c.price), 0),
+  });
 };
 
 const fetchAndPushTestimonials = async () => {
-  if (isSupabaseConfigured && supabase) {
-    const { data, error } = await supabase.from('testimonials').select('*').order('created_at', { ascending: false });
-    if (!error && data) pushTestimonials(data.map(standardiseTestimonial));
+  if (!isSupabaseConfigured || !supabase) {
+    pushTestimonials([]);
+    return;
   }
+  const { data, error } = await supabase
+    .from('testimonials')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) {
+    console.error('[db] fetchTestimonials error:', error.message);
+    return;
+  }
+  pushTestimonials((data ?? []).map(standardiseTestimonial));
 };
 
 // ----------------------------------------------------
@@ -62,8 +73,8 @@ let authListeners: ((user: User | null) => void)[] = [];
 
 const getActiveUser = (): User | null => {
   const stored = localStorage.getItem('yt_admin_session');
-  if (stored) { try { return JSON.parse(stored) as User; } catch { return null; } }
-  return null;
+  if (!stored) return null;
+  try { return JSON.parse(stored) as User; } catch { return null; }
 };
 
 export const subscribeToAuth = (callback: (user: User | null) => void): (() => void) => {
@@ -77,48 +88,32 @@ export const subscribeToAuth = (callback: (user: User | null) => void): (() => v
   };
 };
 
-const notifyAuthChange = () => {
-  const user = getActiveUser();
-  authListeners.forEach(l => l(user));
-};
+const notifyAuthChange = () => authListeners.forEach(l => l(getActiveUser()));
 
 export const loginWithEmailAndPassword = async (email: string, password: string): Promise<User | null> => {
-  if (isSupabaseConfigured && supabase) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-    if (data?.user) {
-      const u: User = {
-        uid: data.user.id,
-        email: data.user.email || null,
-        displayName: data.user.user_metadata?.full_name || 'Broker Admin',
-        emailVerified: !!data.user.email_confirmed_at,
-        photoURL: data.user.user_metadata?.avatar_url || null,
-      };
-      if (!checkIsAdminUser(u)) {
-        await supabase.auth.signOut();
-        throw new Error('Access Denied: Your account is not authorized.');
-      }
-      localStorage.setItem('yt_admin_session', JSON.stringify(u));
-      notifyAuthChange();
-      return u;
-    }
+  if (!isSupabaseConfigured || !supabase) {
+    throw new Error('Database not configured. Check your environment variables.');
+  }
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw new Error(error.message);
+  if (!data?.user) throw new Error('Login failed. No user returned.');
+
+  const u: User = {
+    uid: data.user.id,
+    email: data.user.email || null,
+    displayName: data.user.user_metadata?.full_name || data.user.email?.split('@')[0] || 'Admin',
+    emailVerified: !!data.user.email_confirmed_at,
+    photoURL: data.user.user_metadata?.avatar_url || null,
+  };
+
+  if (!checkIsAdminUser(u)) {
+    await supabase.auth.signOut();
+    throw new Error('Access denied. Your account is not authorised as admin.');
   }
 
-  // Local fallback
-  const adminEmails = ['djdas000000@gmail.com', 'admin@buysellmarket.com', 'admin@ytmarket.com'];
-  if (adminEmails.includes(email) && password === 'ytmarket@admin2026') {
-    const u: User = {
-      uid: 'local-admin-uid',
-      email,
-      displayName: 'System Admin',
-      emailVerified: true,
-      photoURL: null,
-    };
-    localStorage.setItem('yt_admin_session', JSON.stringify(u));
-    notifyAuthChange();
-    return u;
-  }
-  throw new Error('Invalid credentials. Access denied.');
+  localStorage.setItem('yt_admin_session', JSON.stringify(u));
+  notifyAuthChange();
+  return u;
 };
 
 export const logoutUser = async (): Promise<void> => {
@@ -128,19 +123,85 @@ export const logoutUser = async (): Promise<void> => {
 };
 
 export const checkIsAdminUser = (user: User | null): boolean => {
-  if (!user) return false;
-  return ['djdas000000@gmail.com', 'admin@buysellmarket.com', 'admin@ytmarket.com'].includes(user.email || '');
+  if (!user?.email) return false;
+  const adminEmails = ['djdas000000@gmail.com', 'admin@buysellmarket.com', 'admin@ytmarket.com'];
+  return adminEmails.includes(user.email.toLowerCase());
+};
+
+// ----------------------------------------------------
+// APP SETTINGS  (whatsapp + social links)
+// ----------------------------------------------------
+export const getAdminWhatsAppNumber = (): string =>
+  localStorage.getItem('yt_admin_whatsapp') || '';
+
+export const setAdminWhatsAppNumber = (num: string): void => {
+  localStorage.setItem('yt_admin_whatsapp', num.trim());
+  if (isSupabaseConfigured && supabase) {
+    supabase.from('app_settings')
+      .upsert({ id: 1, whatsapp_number: num.trim(), updated_at: new Date().toISOString() })
+      .then(({ error }) => { if (error) console.error('[db] save whatsapp error:', error.message); });
+  }
+  window.dispatchEvent(new Event('storage'));
 };
 
 export const fetchAdminWhatsAppNumber = async (): Promise<string> => {
   if (isSupabaseConfigured && supabase) {
-    const { data, error } = await supabase.from('app_settings').select('whatsapp_number').eq('id', 1).maybeSingle();
-    if (!error && data?.whatsapp_number) {
-      localStorage.setItem('yt_admin_whatsapp', data.whatsapp_number);
-      return data.whatsapp_number;
+    const { data, error } = await supabase
+      .from('app_settings')
+      .select('whatsapp_number, whatsapp_channel_url, instagram_url, facebook_url')
+      .eq('id', 1)
+      .maybeSingle();
+    if (!error && data) {
+      if (data.whatsapp_number) localStorage.setItem('yt_admin_whatsapp', data.whatsapp_number);
+      if (data.instagram_url || data.whatsapp_channel_url || data.facebook_url) {
+        localStorage.setItem('yt_social_links', JSON.stringify({
+          instagram: data.instagram_url || '',
+          facebook: data.facebook_url || '',
+          whatsappChannel: data.whatsapp_channel_url || '',
+        }));
+        window.dispatchEvent(new Event('storage'));
+      }
+      return data.whatsapp_number || '';
     }
   }
   return getAdminWhatsAppNumber();
+};
+
+export interface SocialLinks {
+  instagram: string;
+  facebook: string;
+  whatsappChannel: string;
+}
+
+export const getSocialLinks = (): SocialLinks => {
+  const stored = localStorage.getItem('yt_social_links');
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      return {
+        instagram: parsed.instagram || '',
+        facebook: parsed.facebook || '',
+        whatsappChannel: parsed.whatsappChannel || '',
+      };
+    } catch {}
+  }
+  return { instagram: '', facebook: '', whatsappChannel: '' };
+};
+
+export const saveSocialLinks = (links: SocialLinks): void => {
+  localStorage.setItem('yt_social_links', JSON.stringify(links));
+  if (isSupabaseConfigured && supabase) {
+    supabase.from('app_settings')
+      .upsert({
+        id: 1,
+        instagram_url: links.instagram.trim(),
+        facebook_url: links.facebook.trim(),
+        whatsapp_channel_url: links.whatsappChannel.trim(),
+        updated_at: new Date().toISOString(),
+      })
+      .then(({ error }) => { if (error) console.error('[db] save social links error:', error.message); });
+  }
+  window.dispatchEvent(new Event('storage'));
 };
 
 // ----------------------------------------------------
@@ -148,9 +209,9 @@ export const fetchAdminWhatsAppNumber = async (): Promise<string> => {
 // ----------------------------------------------------
 export const subscribeToChannels = (callback: ChannelCallback): (() => void) => {
   channelSubscribers.add(callback);
+  fetchAndPushChannels();
 
   if (isSupabaseConfigured && supabase) {
-    fetchAndPushChannels();
     const sb = supabase;
     const sub = sb
       .channel('channels-rt')
@@ -161,140 +222,71 @@ export const subscribeToChannels = (callback: ChannelCallback): (() => void) => 
       sb.removeChannel(sub);
     };
   }
-
-  // Local fallback
-  const syncLocal = () => {
-    callback(getLocalData<Channel[]>('yt_channels', INITIAL_CHANNELS));
-  };
-  syncLocal();
-  window.addEventListener('storage', syncLocal);
-  return () => {
-    channelSubscribers.delete(callback);
-    window.removeEventListener('storage', syncLocal);
-  };
-};
-
-export const getAdminWhatsAppNumber = (): string =>
-  localStorage.getItem('yt_admin_whatsapp') || '+919144534891';
-
-export const setAdminWhatsAppNumber = (num: string): void => {
-  localStorage.setItem('yt_admin_whatsapp', num);
-  if (isSupabaseConfigured && supabase) {
-    supabase.from('app_settings')
-      .upsert({ id: 1, whatsapp_number: num, updated_at: new Date().toISOString() })
-      .then(({ error }) => { if (error) console.error(error); });
-  }
-  window.dispatchEvent(new Event('storage'));
-};
-
-export interface SocialLinks {
-  instagram: string;
-  facebook: string;
-  whatsappChannel: string;
-}
-
-const DEFAULT_SOCIAL_LINKS: SocialLinks = {
-  instagram: 'https://www.instagram.com/buy.sellmarket',
-  facebook: 'https://www.facebook.com/share/18dPe2V26i/',
-  whatsappChannel: 'https://whatsapp.com/channel/0029VbD4kYR65yDJzTbS3B2e',
-};
-
-export const getSocialLinks = (): SocialLinks => {
-  const stored = localStorage.getItem('yt_social_links');
-  if (stored) { try { return { ...DEFAULT_SOCIAL_LINKS, ...JSON.parse(stored) }; } catch {} }
-  return DEFAULT_SOCIAL_LINKS;
-};
-
-export const saveSocialLinks = (links: SocialLinks): void => {
-  localStorage.setItem('yt_social_links', JSON.stringify(links));
-  window.dispatchEvent(new Event('storage'));
+  return () => { channelSubscribers.delete(callback); };
 };
 
 export const addChannelListing = async (channel: Omit<Channel, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
-  const newId = `channel-${Date.now()}`;
+  if (!isSupabaseConfigured || !supabase) throw new Error('Database not configured.');
 
-  if (isSupabaseConfigured && supabase) {
-    const { data, error } = await supabase.from('channels').insert([{
-      id: newId,
-      title: channel.title,
-      youtube_url: channel.youtubeUrl,
-      niche: channel.niche,
-      description: channel.description,
-      subscribers: Number(channel.subscribers),
-      monthly_views: Number(channel.monthlyViews),
-      monthly_revenue: Number(channel.monthlyRevenue),
-      audience_country: channel.audienceCountry,
-      channel_age: channel.channelAge,
-      monetized: !!channel.monetized,
-      shorts: !!channel.shorts,
-      price: Number(channel.price || 0),
-      whatsapp_number: getAdminWhatsAppNumber(),
-      featured: !!channel.featured,
-      status: channel.status,
-      images: channel.images,
-      sold_price: channel.soldPrice ? Number(channel.soldPrice) : null,
-      sold_date: channel.soldDate || null,
-    }]).select();
-    if (error) throw error;
-    await fetchAndPushChannels(); // immediate UI update
-    return data && data[0] ? String(data[0].id) : newId;
-  }
+  const newId = `ch-${Date.now()}`;
+  const { data, error } = await supabase.from('channels').insert([{
+    id: newId,
+    title: channel.title.trim(),
+    youtube_url: channel.youtubeUrl.trim(),
+    niche: channel.niche,
+    description: channel.description.trim(),
+    subscribers: Number(channel.subscribers) || 0,
+    monthly_views: Number(channel.monthlyViews) || 0,
+    monthly_revenue: Number(channel.monthlyRevenue) || 0,
+    audience_country: channel.audienceCountry.trim() || 'India',
+    channel_age: channel.channelAge.trim() || '1 Year',
+    monetized: !!channel.monetized,
+    shorts: !!channel.shorts,
+    price: 0,
+    whatsapp_number: getAdminWhatsAppNumber(),
+    featured: !!channel.featured,
+    status: channel.status,
+    images: Array.isArray(channel.images) ? channel.images.filter(Boolean) : [],
+    sold_price: channel.soldPrice ? Number(channel.soldPrice) : null,
+    sold_date: channel.soldDate || null,
+  }]).select();
 
-  const now = new Date().toISOString();
-  const item: Channel = { ...channel, id: newId, createdAt: now, updatedAt: now, whatsappNumber: getAdminWhatsAppNumber() };
-  const current = getLocalData<Channel[]>('yt_channels', INITIAL_CHANNELS);
-  setLocalData('yt_channels', [item, ...current]);
-  recalculateLocalStats();
-  window.dispatchEvent(new Event('storage'));
-  return newId;
+  if (error) throw new Error(error.message);
+  await fetchAndPushChannels();
+  return data?.[0] ? String(data[0].id) : newId;
 };
 
 export const updateChannelListing = async (id: string, updates: Partial<Channel>): Promise<void> => {
-  if (isSupabaseConfigured && supabase) {
-    const dbUpdates: any = {};
-    if (updates.title !== undefined) dbUpdates.title = updates.title;
-    if (updates.youtubeUrl !== undefined) dbUpdates.youtube_url = updates.youtubeUrl;
-    if (updates.niche !== undefined) dbUpdates.niche = updates.niche;
-    if (updates.description !== undefined) dbUpdates.description = updates.description;
-    if (updates.subscribers !== undefined) dbUpdates.subscribers = Number(updates.subscribers);
-    if (updates.monthlyViews !== undefined) dbUpdates.monthly_views = Number(updates.monthlyViews);
-    if (updates.monthlyRevenue !== undefined) dbUpdates.monthly_revenue = Number(updates.monthlyRevenue);
-    if (updates.audienceCountry !== undefined) dbUpdates.audience_country = updates.audienceCountry;
-    if (updates.channelAge !== undefined) dbUpdates.channel_age = updates.channelAge;
-    if (updates.monetized !== undefined) dbUpdates.monetized = !!updates.monetized;
-    if (updates.shorts !== undefined) dbUpdates.shorts = !!updates.shorts;
-    if (updates.price !== undefined) dbUpdates.price = Number(updates.price);
-    if (updates.featured !== undefined) dbUpdates.featured = !!updates.featured;
-    if (updates.status !== undefined) dbUpdates.status = updates.status;
-    if (updates.images !== undefined) dbUpdates.images = updates.images;
-    if (updates.soldPrice !== undefined) dbUpdates.sold_price = updates.soldPrice ? Number(updates.soldPrice) : null;
-    if (updates.soldDate !== undefined) dbUpdates.sold_date = updates.soldDate || null;
-    dbUpdates.updated_at = new Date().toISOString();
+  if (!isSupabaseConfigured || !supabase) throw new Error('Database not configured.');
 
-    const { error } = await supabase.from('channels').update(dbUpdates).eq('id', id);
-    if (error) throw error;
-    await fetchAndPushChannels(); // immediate UI update
-    return;
-  }
+  const dbUpdates: Record<string, any> = { updated_at: new Date().toISOString() };
+  if (updates.title !== undefined) dbUpdates.title = updates.title.trim();
+  if (updates.youtubeUrl !== undefined) dbUpdates.youtube_url = updates.youtubeUrl.trim();
+  if (updates.niche !== undefined) dbUpdates.niche = updates.niche;
+  if (updates.description !== undefined) dbUpdates.description = updates.description.trim();
+  if (updates.subscribers !== undefined) dbUpdates.subscribers = Number(updates.subscribers) || 0;
+  if (updates.monthlyViews !== undefined) dbUpdates.monthly_views = Number(updates.monthlyViews) || 0;
+  if (updates.monthlyRevenue !== undefined) dbUpdates.monthly_revenue = Number(updates.monthlyRevenue) || 0;
+  if (updates.audienceCountry !== undefined) dbUpdates.audience_country = updates.audienceCountry.trim();
+  if (updates.channelAge !== undefined) dbUpdates.channel_age = updates.channelAge.trim();
+  if (updates.monetized !== undefined) dbUpdates.monetized = !!updates.monetized;
+  if (updates.shorts !== undefined) dbUpdates.shorts = !!updates.shorts;
+  if (updates.featured !== undefined) dbUpdates.featured = !!updates.featured;
+  if (updates.status !== undefined) dbUpdates.status = updates.status;
+  if (updates.images !== undefined) dbUpdates.images = Array.isArray(updates.images) ? updates.images.filter(Boolean) : [];
+  if (updates.soldPrice !== undefined) dbUpdates.sold_price = updates.soldPrice ? Number(updates.soldPrice) : null;
+  if (updates.soldDate !== undefined) dbUpdates.sold_date = updates.soldDate || null;
 
-  const current = getLocalData<Channel[]>('yt_channels', INITIAL_CHANNELS);
-  setLocalData('yt_channels', current.map(c => c.id === id ? { ...c, ...updates, id, updatedAt: new Date().toISOString() } : c));
-  recalculateLocalStats();
-  window.dispatchEvent(new Event('storage'));
+  const { error } = await supabase.from('channels').update(dbUpdates).eq('id', id);
+  if (error) throw new Error(error.message);
+  await fetchAndPushChannels();
 };
 
 export const deleteChannelListing = async (id: string): Promise<void> => {
-  if (isSupabaseConfigured && supabase) {
-    const { error } = await supabase.from('channels').delete().eq('id', id);
-    if (error) throw error;
-    await fetchAndPushChannels(); // immediate UI update
-    return;
-  }
-
-  const current = getLocalData<Channel[]>('yt_channels', INITIAL_CHANNELS);
-  setLocalData('yt_channels', current.filter(c => c.id !== id));
-  recalculateLocalStats();
-  window.dispatchEvent(new Event('storage'));
+  if (!isSupabaseConfigured || !supabase) throw new Error('Database not configured.');
+  const { error } = await supabase.from('channels').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+  await fetchAndPushChannels();
 };
 
 // ----------------------------------------------------
@@ -302,9 +294,9 @@ export const deleteChannelListing = async (id: string): Promise<void> => {
 // ----------------------------------------------------
 export const subscribeToTestimonials = (callback: TestimonialCallback): (() => void) => {
   testimonialSubscribers.add(callback);
+  fetchAndPushTestimonials();
 
   if (isSupabaseConfigured && supabase) {
-    fetchAndPushTestimonials();
     const sb = supabase;
     const sub = sb
       .channel('testimonials-rt')
@@ -315,50 +307,27 @@ export const subscribeToTestimonials = (callback: TestimonialCallback): (() => v
       sb.removeChannel(sub);
     };
   }
-
-  const syncLocal = () => {
-    callback(getLocalData<Testimonial[]>('yt_testimonials', INITIAL_TESTIMONIALS));
-  };
-  syncLocal();
-  window.addEventListener('storage', syncLocal);
-  return () => {
-    testimonialSubscribers.delete(callback);
-    window.removeEventListener('storage', syncLocal);
-  };
+  return () => { testimonialSubscribers.delete(callback); };
 };
 
 export const addTestimonialListing = async (testi: Omit<Testimonial, 'id' | 'createdAt'>): Promise<string> => {
-  if (isSupabaseConfigured && supabase) {
-    const { data, error } = await supabase.from('testimonials').insert([{
-      name: testi.name,
-      review: testi.review,
-      rating: Number(testi.rating),
-      role: testi.role,
-    }]).select();
-    if (error) throw error;
-    await fetchAndPushTestimonials(); // immediate UI update
-    return data && data[0] ? String(data[0].id) : `testi-${Date.now()}`;
-  }
-
-  const newId = `testi-${Date.now()}`;
-  const item: Testimonial = { ...testi, id: newId, createdAt: new Date().toISOString() };
-  const current = getLocalData<Testimonial[]>('yt_testimonials', INITIAL_TESTIMONIALS);
-  setLocalData('yt_testimonials', [item, ...current]);
-  window.dispatchEvent(new Event('storage'));
-  return newId;
+  if (!isSupabaseConfigured || !supabase) throw new Error('Database not configured.');
+  const { data, error } = await supabase.from('testimonials').insert([{
+    name: testi.name.trim(),
+    review: testi.review.trim(),
+    rating: Number(testi.rating),
+    role: testi.role.trim() || 'Verified Customer',
+  }]).select();
+  if (error) throw new Error(error.message);
+  await fetchAndPushTestimonials();
+  return data?.[0] ? String(data[0].id) : `testi-${Date.now()}`;
 };
 
 export const deleteTestimonialListing = async (id: string): Promise<void> => {
-  if (isSupabaseConfigured && supabase) {
-    const { error } = await supabase.from('testimonials').delete().eq('id', id);
-    if (error) throw error;
-    await fetchAndPushTestimonials(); // immediate UI update
-    return;
-  }
-
-  const current = getLocalData<Testimonial[]>('yt_testimonials', INITIAL_TESTIMONIALS);
-  setLocalData('yt_testimonials', current.filter(t => t.id !== id));
-  window.dispatchEvent(new Event('storage'));
+  if (!isSupabaseConfigured || !supabase) throw new Error('Database not configured.');
+  const { error } = await supabase.from('testimonials').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+  await fetchAndPushTestimonials();
 };
 
 // ----------------------------------------------------
@@ -366,9 +335,9 @@ export const deleteTestimonialListing = async (id: string): Promise<void> => {
 // ----------------------------------------------------
 export const subscribeToStats = (callback: StatsCallback): (() => void) => {
   statsSubscribers.add(callback);
+  fetchAndPushChannels(); // stats derived from channels
 
   if (isSupabaseConfigured && supabase) {
-    fetchAndPushChannels();
     const sb = supabase;
     const sub = sb
       .channel('stats-rt')
@@ -379,32 +348,7 @@ export const subscribeToStats = (callback: StatsCallback): (() => void) => {
       sb.removeChannel(sub);
     };
   }
-
-  const syncLocal = () => {
-    callback(getLocalData<HomepageStats>('yt_stats', INITIAL_STATS));
-  };
-  syncLocal();
-  window.addEventListener('storage', syncLocal);
-  return () => {
-    statsSubscribers.delete(callback);
-    window.removeEventListener('storage', syncLocal);
-  };
+  return () => { statsSubscribers.delete(callback); };
 };
 
-const recalculateLocalStats = () => {
-  const channels = getLocalData<Channel[]>('yt_channels', INITIAL_CHANNELS);
-  const sold = channels.filter(c => c.status === 'sold');
-  setLocalData('yt_stats', {
-    totalListings: channels.length,
-    totalSold: sold.length,
-    totalSubscribersSold: sold.reduce((s, c) => s + c.subscribers, 0),
-    totalMarketplaceValue: channels.reduce((s, c) => s + (c.status === 'sold' ? (c.soldPrice || c.price) : c.price), 0),
-  });
-};
-
-export const updatePlatformStats = async (updates: HomepageStats): Promise<void> => {
-  if (isLocalStorageFallback) {
-    setLocalData('yt_stats', updates);
-    window.dispatchEvent(new Event('storage'));
-  }
-};
+export const isLocalStorageFallback = false;

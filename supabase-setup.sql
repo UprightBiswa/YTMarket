@@ -1,28 +1,27 @@
 -- ============================================================
--- Buy Sell Market — Supabase SQL Setup (Production Clean)
--- Run once in: Supabase Dashboard → SQL Editor → New Query
--- All statements are idempotent — safe to re-run anytime
+-- Buy Sell Market — Final Production SQL
+-- Paste ENTIRE file into Supabase SQL Editor → Run
+-- Safe to re-run anytime (all idempotent)
 -- ============================================================
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- ------------------------------------------------------------
--- 1. ADMINS whitelist
+-- 1. ADMINS
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.admins (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email TEXT NOT NULL UNIQUE,
     full_name TEXT DEFAULT 'Admin',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc', now()) NOT NULL
+    created_at TIMESTAMPTZ DEFAULT timezone('utc', now()) NOT NULL
 );
 
--- Add your admin email here (no dummy data)
 INSERT INTO public.admins (email, full_name)
 VALUES ('djdas000000@gmail.com', 'Buy Sell Market Admin')
 ON CONFLICT (email) DO NOTHING;
 
 -- ------------------------------------------------------------
--- 2. APP SETTINGS (single config row)
+-- 2. APP SETTINGS
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.app_settings (
     id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -30,13 +29,12 @@ CREATE TABLE IF NOT EXISTS public.app_settings (
     whatsapp_channel_url TEXT DEFAULT '',
     instagram_url TEXT DEFAULT '',
     facebook_url TEXT DEFAULT '',
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc', now()) NOT NULL
+    updated_at TIMESTAMPTZ DEFAULT timezone('utc', now()) NOT NULL
 );
 
--- Add app_name column if it doesn't exist yet (safe migration)
+-- Safe migration: add column if table already existed without it
 ALTER TABLE public.app_settings ADD COLUMN IF NOT EXISTS app_name TEXT DEFAULT 'Buy Sell Market';
 
--- Insert empty default row (admin fills values from UI)
 INSERT INTO public.app_settings (id, whatsapp_number, whatsapp_channel_url, instagram_url, facebook_url, app_name)
 VALUES (1, '', '', '', '', 'Buy Sell Market')
 ON CONFLICT (id) DO NOTHING;
@@ -62,13 +60,13 @@ CREATE TABLE IF NOT EXISTS public.channels (
     featured BOOLEAN DEFAULT false,
     status TEXT NOT NULL DEFAULT 'available' CHECK (status IN ('available', 'sold')),
     images TEXT[] DEFAULT '{}',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc', now()) NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc', now()) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc', now()) NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT timezone('utc', now()) NOT NULL,
     sold_price INTEGER,
     sold_date TEXT
 );
 
--- Auto-update updated_at trigger
+-- Auto-update updated_at on every row change
 CREATE OR REPLACE FUNCTION public.set_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -91,7 +89,7 @@ CREATE TABLE IF NOT EXISTS public.testimonials (
     review TEXT NOT NULL,
     rating INTEGER DEFAULT 5 CHECK (rating BETWEEN 1 AND 5),
     role TEXT NOT NULL DEFAULT 'Verified Customer',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc', now()) NOT NULL
+    created_at TIMESTAMPTZ DEFAULT timezone('utc', now()) NOT NULL
 );
 
 -- ------------------------------------------------------------
@@ -102,12 +100,12 @@ ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.channels ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.testimonials ENABLE ROW LEVEL SECURITY;
 
--- admins: read only for all
+-- ADMINS: anyone can read
 DROP POLICY IF EXISTS "Public read admins" ON public.admins;
 CREATE POLICY "Public read admins" ON public.admins
   FOR SELECT TO anon, authenticated USING (true);
 
--- app_settings: read for all, write only for admin
+-- APP SETTINGS: anyone reads, only admin writes
 DROP POLICY IF EXISTS "Public read app settings" ON public.app_settings;
 CREATE POLICY "Public read app settings" ON public.app_settings
   FOR SELECT TO anon, authenticated USING (true);
@@ -123,7 +121,7 @@ CREATE POLICY "Admin update app settings" ON public.app_settings
   USING (EXISTS (SELECT 1 FROM public.admins a WHERE a.email = auth.jwt() ->> 'email'))
   WITH CHECK (EXISTS (SELECT 1 FROM public.admins a WHERE a.email = auth.jwt() ->> 'email'));
 
--- channels: public read, admin full write
+-- CHANNELS: anyone reads, only admin writes
 DROP POLICY IF EXISTS "Public read channels" ON public.channels;
 CREATE POLICY "Public read channels" ON public.channels
   FOR SELECT TO anon, authenticated USING (true);
@@ -144,7 +142,7 @@ CREATE POLICY "Admin delete channels" ON public.channels
   FOR DELETE TO authenticated
   USING (EXISTS (SELECT 1 FROM public.admins a WHERE a.email = auth.jwt() ->> 'email'));
 
--- testimonials: public read, admin insert + delete
+-- TESTIMONIALS: anyone reads, only admin writes
 DROP POLICY IF EXISTS "Public read testimonials" ON public.testimonials;
 CREATE POLICY "Public read testimonials" ON public.testimonials
   FOR SELECT TO anon, authenticated USING (true);
@@ -160,8 +158,7 @@ CREATE POLICY "Admin delete testimonials" ON public.testimonials
   USING (EXISTS (SELECT 1 FROM public.admins a WHERE a.email = auth.jwt() ->> 'email'));
 
 -- ============================================================
--- TO WIPE ALL CONTENT AND START FRESH (run separately):
+-- FRESH START (run separately if needed):
 --   TRUNCATE TABLE public.channels;
 --   TRUNCATE TABLE public.testimonials;
---   UPDATE public.app_settings SET whatsapp_number='', whatsapp_channel_url='', instagram_url='', facebook_url='' WHERE id=1;
 -- ============================================================

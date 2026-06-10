@@ -150,18 +150,15 @@ export const subscribeToChannels = (callback: ChannelCallback): (() => void) => 
   channelSubscribers.add(callback);
 
   if (isSupabaseConfigured && supabase) {
-    // Initial fetch
     fetchAndPushChannels();
-
-    // Realtime (works if enabled, bonus — not relied upon)
-    const sub = supabase
+    const sb = supabase;
+    const sub = sb
       .channel('channels-rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'channels' }, fetchAndPushChannels)
       .subscribe();
-
     return () => {
       channelSubscribers.delete(callback);
-      supabase.removeChannel(sub);
+      sb.removeChannel(sub);
     };
   }
 
@@ -308,15 +305,14 @@ export const subscribeToTestimonials = (callback: TestimonialCallback): (() => v
 
   if (isSupabaseConfigured && supabase) {
     fetchAndPushTestimonials();
-
-    const sub = supabase
+    const sb = supabase;
+    const sub = sb
       .channel('testimonials-rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'testimonials' }, fetchAndPushTestimonials)
       .subscribe();
-
     return () => {
       testimonialSubscribers.delete(callback);
-      supabase.removeChannel(sub);
+      sb.removeChannel(sub);
     };
   }
 
@@ -372,16 +368,15 @@ export const subscribeToStats = (callback: StatsCallback): (() => void) => {
   statsSubscribers.add(callback);
 
   if (isSupabaseConfigured && supabase) {
-    fetchAndPushChannels(); // stats are derived from channels fetch above
-
-    const sub = supabase
+    fetchAndPushChannels();
+    const sb = supabase;
+    const sub = sb
       .channel('stats-rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'channels' }, fetchAndPushChannels)
       .subscribe();
-
     return () => {
       statsSubscribers.delete(callback);
-      supabase.removeChannel(sub);
+      sb.removeChannel(sub);
     };
   }
 

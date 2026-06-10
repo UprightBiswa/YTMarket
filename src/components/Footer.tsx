@@ -1,5 +1,5 @@
 import { Facebook, Instagram, MessageSquare } from 'lucide-react';
-import { getSocialLinks } from '../lib/db';
+import { getSocialLinks, getAdminWhatsAppNumber } from '../lib/db';
 import { useState, useEffect } from 'react';
 
 interface FooterProps {
@@ -8,9 +8,13 @@ interface FooterProps {
 
 export default function Footer({ setActiveTab }: FooterProps) {
   const [social, setSocial] = useState(getSocialLinks());
+  const [waNumber, setWaNumber] = useState(getAdminWhatsAppNumber());
 
   useEffect(() => {
-    const sync = () => setSocial(getSocialLinks());
+    const sync = () => {
+      setSocial(getSocialLinks());
+      setWaNumber(getAdminWhatsAppNumber());
+    };
     window.addEventListener('storage', sync);
     return () => window.removeEventListener('storage', sync);
   }, []);
@@ -85,16 +89,19 @@ export default function Footer({ setActiveTab }: FooterProps) {
               Need assistance? Speak direct with an administrator regarding a premium listing or listing submission.
             </p>
             <div className="flex gap-2">
-              <a 
-                href="https://wa.me/919144534891?text=Hello%20Buy%20Sell%20Market%20Support" 
-                target="_blank" 
-                referrerPolicy="no-referrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded text-xs font-medium transition-colors"
-                id="footer-wa-support"
-              >
-                <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
-                Contact Administrator
-              </a>
+              {waNumber && (
+                <a
+                  href={`https://wa.me/${waNumber.replace(/[^0-9]/g, '')}?text=Hello%20Buy%20Sell%20Market%20Support`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  referrerPolicy="no-referrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded text-xs font-medium transition-colors"
+                  id="footer-wa-support"
+                >
+                  <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+                  Contact Administrator
+                </a>
+              )}
             </div>
           </div>
 

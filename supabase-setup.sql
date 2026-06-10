@@ -1,51 +1,45 @@
 -- ============================================================
--- Buy Sell Market — Supabase SQL Setup
+-- Buy Sell Market — Supabase SQL Setup (Production Clean)
 -- Run once in: Supabase Dashboard → SQL Editor → New Query
--- Safe to re-run (all statements are idempotent)
+-- All statements are idempotent — safe to re-run anytime
 -- ============================================================
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- ------------------------------------------------------------
--- 1. ADMINS whitelist (Supabase Auth handles passwords)
+-- 1. ADMINS whitelist
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.admins (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email TEXT NOT NULL UNIQUE,
-    full_name TEXT DEFAULT 'Buy Sell Market Admin',
+    full_name TEXT DEFAULT 'Admin',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc', now()) NOT NULL
 );
 
+-- Add your admin email here (no dummy data)
 INSERT INTO public.admins (email, full_name)
 VALUES ('djdas000000@gmail.com', 'Buy Sell Market Admin')
 ON CONFLICT (email) DO NOTHING;
 
 -- ------------------------------------------------------------
--- 2. APP SETTINGS (single row, id always = 1)
+-- 2. APP SETTINGS (single config row)
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.app_settings (
     id INTEGER PRIMARY KEY CHECK (id = 1),
-    whatsapp_number TEXT NOT NULL DEFAULT '+919144534891',
-    whatsapp_channel_url TEXT DEFAULT 'https://whatsapp.com/channel/0029VbD4kYR65yDJzTbS3B2e',
-    instagram_url TEXT DEFAULT 'https://www.instagram.com/buy.sellmarket',
-    facebook_url TEXT DEFAULT 'https://www.facebook.com/share/18dPe2V26i/',
+    whatsapp_number TEXT NOT NULL DEFAULT '',
+    whatsapp_channel_url TEXT DEFAULT '',
+    instagram_url TEXT DEFAULT '',
+    facebook_url TEXT DEFAULT '',
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc', now()) NOT NULL
 );
 
-INSERT INTO public.app_settings (id, whatsapp_number, whatsapp_channel_url, instagram_url, facebook_url)
-VALUES (
-    1,
-    '+919144534891',
-    'https://whatsapp.com/channel/0029VbD4kYR65yDJzTbS3B2e',
-    'https://www.instagram.com/buy.sellmarket',
-    'https://www.facebook.com/share/18dPe2V26i/'
-)
-ON CONFLICT (id) DO UPDATE SET
-    whatsapp_number      = EXCLUDED.whatsapp_number,
-    whatsapp_channel_url = EXCLUDED.whatsapp_channel_url,
-    instagram_url        = EXCLUDED.instagram_url,
-    facebook_url         = EXCLUDED.facebook_url,
-    updated_at           = timezone('utc', now());
+-- Add app_name column if it doesn't exist yet (safe migration)
+ALTER TABLE public.app_settings ADD COLUMN IF NOT EXISTS app_name TEXT DEFAULT 'Buy Sell Market';
+
+-- Insert empty default row (admin fills values from UI)
+INSERT INTO public.app_settings (id, whatsapp_number, whatsapp_channel_url, instagram_url, facebook_url, app_name)
+VALUES (1, '', '', '', '', 'Buy Sell Market')
+ON CONFLICT (id) DO NOTHING;
 
 -- ------------------------------------------------------------
 -- 3. CHANNELS
@@ -55,7 +49,7 @@ CREATE TABLE IF NOT EXISTS public.channels (
     title TEXT NOT NULL,
     youtube_url TEXT NOT NULL,
     niche TEXT NOT NULL DEFAULT 'Gaming',
-    description TEXT,
+    description TEXT DEFAULT '',
     subscribers INTEGER DEFAULT 0,
     monthly_views INTEGER DEFAULT 0,
     monthly_revenue INTEGER DEFAULT 0,
@@ -64,7 +58,7 @@ CREATE TABLE IF NOT EXISTS public.channels (
     monetized BOOLEAN DEFAULT true,
     shorts BOOLEAN DEFAULT false,
     price INTEGER DEFAULT 0,
-    whatsapp_number TEXT NOT NULL DEFAULT '+919144534891',
+    whatsapp_number TEXT NOT NULL DEFAULT '',
     featured BOOLEAN DEFAULT false,
     status TEXT NOT NULL DEFAULT 'available' CHECK (status IN ('available', 'sold')),
     images TEXT[] DEFAULT '{}',
@@ -74,7 +68,7 @@ CREATE TABLE IF NOT EXISTS public.channels (
     sold_date TEXT
 );
 
--- Auto-update updated_at on every row change
+-- Auto-update updated_at trigger
 CREATE OR REPLACE FUNCTION public.set_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -108,12 +102,12 @@ ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.channels ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.testimonials ENABLE ROW LEVEL SECURITY;
 
--- admins: public read only
+-- admins: read only for all
 DROP POLICY IF EXISTS "Public read admins" ON public.admins;
 CREATE POLICY "Public read admins" ON public.admins
   FOR SELECT TO anon, authenticated USING (true);
 
--- app_settings: public read, admin upsert (INSERT + UPDATE)
+-- app_settings: read for all, write only for admin
 DROP POLICY IF EXISTS "Public read app settings" ON public.app_settings;
 CREATE POLICY "Public read app settings" ON public.app_settings
   FOR SELECT TO anon, authenticated USING (true);
@@ -166,7 +160,8 @@ CREATE POLICY "Admin delete testimonials" ON public.testimonials
   USING (EXISTS (SELECT 1 FROM public.admins a WHERE a.email = auth.jwt() ->> 'email'));
 
 -- ============================================================
--- TO CLEAR ALL DATA AND START FRESH (run separately):
+-- TO WIPE ALL CONTENT AND START FRESH (run separately):
 --   TRUNCATE TABLE public.channels;
 --   TRUNCATE TABLE public.testimonials;
+--   UPDATE public.app_settings SET whatsapp_number='', whatsapp_channel_url='', instagram_url='', facebook_url='' WHERE id=1;
 -- ============================================================

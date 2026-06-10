@@ -4,15 +4,6 @@
  */
 
 import { useState, useEffect } from 'react';
-import { 
-  Tv, 
-  ShieldCheck, 
-  Sparkles, 
-  TvMinimalPlay, 
-  TrendingUp, 
-  Award,
-  CircleAlert
-} from 'lucide-react';
 import { Channel, Testimonial, HomepageStats, User } from './types';
 import { 
   subscribeToAuth, 
@@ -62,8 +53,7 @@ export default function App() {
   // Modal selector focus states
   const [activeChannelDetails, setActiveChannelDetails] = useState<Channel | null>(null);
 
-  // Custom user niche preferences saved in browser cookie & local storage
-  const [favoriteNiches, setFavoriteNiches] = useState<string[]>([]);
+  const favoriteNiches: string[] = [];
 
   // Listeners binding and URL Routing synchronization
   useEffect(() => {
@@ -186,6 +176,7 @@ export default function App() {
                 testimonials={testimonials} 
                 stats={stats} 
                 user={user}
+                onSelectChannel={handleSelectChannelDetails}
                 onBackToUserApp={() => {
                   setActiveTab('home');
                   window.location.hash = '#/home';

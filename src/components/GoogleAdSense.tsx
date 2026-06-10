@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Sparkles, Info, X, ExternalLink, ShieldCheck } from 'lucide-react';
+import { Sparkles, X, ExternalLink } from 'lucide-react';
 
 interface GoogleAdSenseProps {
   slot?: string;
@@ -12,8 +12,17 @@ export default function GoogleAdSense({ slot = 'general-slot', format = 'horizon
   const adRef = useRef<HTMLModElement | null>(null);
   const metaEnv = (import.meta as any).env || {};
   const clientId = metaEnv.VITE_GOOGLE_ADSENSE_CLIENT_ID;
+  const slotMap: Record<string, string | undefined> = {
+    'home-middle-sponsor': metaEnv.VITE_GOOGLE_ADSENSE_SLOT_HOME,
+    'channel-details-popup': metaEnv.VITE_GOOGLE_ADSENSE_SLOT_DETAILS,
+  };
+  const resolvedSlot = slotMap[slot] || slot;
 
-  const isAdSenseConfigured = clientId && clientId !== 'ca-pub-XXXXXXXXXXXXXXXX';
+  const isAdSenseConfigured =
+    clientId &&
+    clientId !== 'ca-pub-XXXXXXXXXXXXXXXX' &&
+    /^ca-pub-\d+$/.test(clientId) &&
+    /^\d+$/.test(resolvedSlot);
 
   // Dynamically load Google AdSense script and initialize the ad slot safely
   useEffect(() => {
@@ -68,7 +77,7 @@ export default function GoogleAdSense({ slot = 'general-slot', format = 'horizon
           className="adsbygoogle"
           style={{ display: 'block' }}
           data-ad-client={clientId}
-          data-ad-slot={slot}
+          data-ad-slot={resolvedSlot}
           data-ad-format={format}
           data-full-width-responsive="true"
         />
@@ -88,7 +97,7 @@ export default function GoogleAdSense({ slot = 'general-slot', format = 'horizon
     >
       {/* Sparkle badge */}
       <div className="absolute top-3 right-3 flex items-center gap-1">
-        <span className="text-[8px] font-bold bg-amber-150 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
+        <span className="text-[8px] font-bold bg-amber-100 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
           Featured
         </span>
         <button 
@@ -100,7 +109,7 @@ export default function GoogleAdSense({ slot = 'general-slot', format = 'horizon
         </button>
       </div>
 
-      <div className={isVertical ? 'space-y-2' : 'flex items-center gap-4.5 text-left'}>
+      <div className={isVertical ? 'space-y-2' : 'flex items-center gap-4 text-left'}>
         <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-md shadow-blue-500/20 mx-auto md:mx-0">
           <Sparkles className="w-6 h-6 text-amber-300 animate-pulse" />
         </div>
@@ -122,7 +131,7 @@ export default function GoogleAdSense({ slot = 'general-slot', format = 'horizon
           href="https://wa.me/919144534891?text=Hello!%20I%20would%20like%20to%20consult%20about%20Buy%20Sell%20Market%20sponsorships."
           target="_blank" 
           rel="noreferrer"
-          className="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-850 text-white text-[10px] font-mono font-bold uppercase px-4 py-2.5 rounded-xl transition-all hover:scale-[1.02] shadow-sm shadow-slate-900/10 cursor-pointer"
+          className="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white text-[10px] font-mono font-bold uppercase px-4 py-2.5 rounded-xl transition-all hover:scale-[1.02] shadow-sm shadow-slate-900/10 cursor-pointer"
         >
           Grow Channel <ExternalLink className="w-3.5 h-3.5" />
         </a>

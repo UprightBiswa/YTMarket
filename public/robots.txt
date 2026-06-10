@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://ytmarket-130354041043.asia-southeast1.run.app/sitemap.xml

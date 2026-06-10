@@ -2,16 +2,12 @@ import { useState } from 'react';
 import { 
   X, 
   MessageSquare, 
-  Tv, 
   CheckCircle2, 
   ShieldCheck, 
   TrendingUp, 
   DollarSign, 
   Users, 
-  Layers, 
   Globe, 
-  CalendarDays, 
-  Image as ImageIcon 
 } from 'lucide-react';
 import { Channel } from '../types';
 import GoogleAdSense from './GoogleAdSense';

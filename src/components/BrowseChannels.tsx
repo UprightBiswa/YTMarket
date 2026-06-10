@@ -4,7 +4,6 @@ import {
   SlidersHorizontal, 
   CheckCircle, 
   ArrowUpRight, 
-  DollarSign, 
   Users, 
   Play, 
   Globe, 
@@ -146,10 +145,6 @@ export default function BrowseChannels({
     if (val >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
     if (val >= 1000) return `${(val / 1000).toFixed(0)}K`;
     return val.toLocaleString();
-  };
-
-  const formatPrice = (val: number) => {
-    return val.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
   };
 
   return (

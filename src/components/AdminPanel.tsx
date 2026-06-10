@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ArrowLeft, Check, Edit, LogOut, MessageSquare, Plus, Save, Trash2, Tv } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, Edit, Eye, LogOut, MessageSquare, Plus, Save, Trash2, Tv } from 'lucide-react';
 import { Channel, Testimonial, HomepageStats } from '../types';
 import {
   addChannelListing,
@@ -20,6 +20,7 @@ interface AdminPanelProps {
   testimonials: Testimonial[];
   stats: HomepageStats;
   user: any;
+  onSelectChannel: (channel: Channel) => void;
   onBackToUserApp: () => void;
 }
 
@@ -27,8 +28,10 @@ type AdminTab = 'channels' | 'testimonials';
 
 const inputClass = 'w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50/70 text-gray-900 outline-none focus:border-red-500 focus:bg-white';
 
-export default function AdminPanel({ channels, testimonials, user, onBackToUserApp }: AdminPanelProps) {
+export default function AdminPanel({ channels, testimonials, user, onSelectChannel, onBackToUserApp }: AdminPanelProps) {
   const [activeTab, setActiveTab] = useState<AdminTab>('channels');
+  const [channelPage, setChannelPage] = useState(1);
+  const [testimonialPage, setTestimonialPage] = useState(1);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
@@ -55,6 +58,29 @@ export default function AdminPanel({ channels, testimonials, user, onBackToUserA
   const [testimonialRole, setTestimonialRole] = useState('Verified Customer');
   const [testimonialRating, setTestimonialRating] = useState(5);
   const [testimonialReview, setTestimonialReview] = useState('');
+  const pageSize = 6;
+
+  const sortedChannels = useMemo(
+    () => [...channels].sort((a, b) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime()),
+    [channels]
+  );
+  const channelTotalPages = Math.max(1, Math.ceil(sortedChannels.length / pageSize));
+  const paginatedChannels = sortedChannels.slice((channelPage - 1) * pageSize, channelPage * pageSize);
+
+  const sortedTestimonials = useMemo(
+    () => [...testimonials].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()),
+    [testimonials]
+  );
+  const testimonialTotalPages = Math.max(1, Math.ceil(sortedTestimonials.length / pageSize));
+  const paginatedTestimonials = sortedTestimonials.slice((testimonialPage - 1) * pageSize, testimonialPage * pageSize);
+
+  useEffect(() => {
+    setChannelPage(page => Math.min(page, channelTotalPages));
+  }, [channelTotalPages]);
+
+  useEffect(() => {
+    setTestimonialPage(page => Math.min(page, testimonialTotalPages));
+  }, [testimonialTotalPages]);
 
   const showNotice = (message: string) => {
     setNotification(message);
@@ -154,6 +180,7 @@ export default function AdminPanel({ channels, testimonials, user, onBackToUserA
         showNotice('Channel created.');
       }
       resetChannelForm();
+      setChannelPage(1);
     } catch (error: any) {
       showNotice(`Database write rejected: ${error?.message || 'check Supabase RLS/Auth setup'}`);
     }
@@ -163,6 +190,7 @@ export default function AdminPanel({ channels, testimonials, user, onBackToUserA
     if (!window.confirm('Delete this channel listing?')) return;
     try {
       await deleteChannelListing(id);
+      setChannelPage(1);
       showNotice('Channel deleted.');
     } catch (error: any) {
       showNotice(`Delete failed: ${error?.message || 'check Supabase permissions'}`);
@@ -185,6 +213,7 @@ export default function AdminPanel({ channels, testimonials, user, onBackToUserA
       });
       setTestimonialName('');
       setTestimonialReview('');
+      setTestimonialPage(1);
       showNotice('Testimonial added.');
     } catch (error: any) {
       showNotice(`Review write failed: ${error?.message || 'check Supabase permissions'}`);
@@ -195,6 +224,7 @@ export default function AdminPanel({ channels, testimonials, user, onBackToUserA
     if (!window.confirm('Delete this testimonial?')) return;
     try {
       await deleteTestimonialListing(id);
+      setTestimonialPage(1);
       showNotice('Testimonial deleted.');
     } catch (error: any) {
       showNotice(`Delete failed: ${error?.message || 'check Supabase permissions'}`);
@@ -285,7 +315,7 @@ export default function AdminPanel({ channels, testimonials, user, onBackToUserA
             <h3 className="font-sans font-extrabold text-base text-gray-900 flex items-center gap-1.5 border-b border-gray-100 pb-3">
               <Plus className="w-5 h-5 text-blue-600" /> {editingId ? 'Edit Channel' : 'Create Channel'}
             </h3>
-            <form onSubmit={saveChannel} className="space-y-4 text-xs font-semibold">
+            <form onSubmit={saveChannel} className="space-y-4 text-xs font-semibold text-gray-700">
               <label className="block space-y-1">Channel Title<input value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} placeholder="e.g. Gaming Pro Live" /></label>
               <div className="grid grid-cols-2 gap-3">
                 <label className="block space-y-1">Niche<select value={niche} onChange={(e) => setNiche(e.target.value)} className={inputClass}>{NICHES.map(n => <option key={n} value={n}>{n}</option>)}</select></label>
@@ -324,24 +354,58 @@ export default function AdminPanel({ channels, testimonials, user, onBackToUserA
           </div>
 
           <div className="lg:col-span-2 bg-white p-5 rounded-2xl border border-gray-100 shadow-md">
-            <h3 className="font-sans font-extrabold text-base text-gray-900 border-b border-gray-100 pb-3">Active Platform Listings ({channels.length})</h3>
-            <div className="divide-y divide-gray-100 overflow-y-auto max-h-[720px] mt-2">
-              {channels.map((channel) => (
-                <div key={channel.id} className="flex justify-between items-center py-3.5 gap-4 hover:bg-gray-50/60 px-2.5 rounded-xl">
-                  <div className="flex items-center space-x-3.5 min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
+              <div>
+                <h3 className="font-sans font-extrabold text-base text-gray-900">All Channel Listings ({channels.length})</h3>
+                <p className="text-[11px] text-gray-500 mt-0.5">View, edit, delete, and update every channel post from here.</p>
+              </div>
+              <span className="text-[10px] font-mono font-bold text-gray-500 bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-100">
+                Page {channelPage} / {channelTotalPages}
+              </span>
+            </div>
+            <div className="divide-y divide-gray-100 mt-2">
+              {paginatedChannels.map((channel) => (
+                <div key={channel.id} className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-3.5 gap-4 hover:bg-gray-50/60 px-2.5 rounded-xl">
+                  <div className="flex items-center space-x-3.5 min-w-0 flex-1">
                     <img src={channel.images?.[0] || 'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?auto=format&fit=crop&w=80&q=80'} alt="" className="w-12 h-12 object-cover rounded-lg bg-gray-100 border shrink-0" />
                     <div className="min-w-0">
                       <span className="text-xs font-mono font-bold bg-gray-100 px-2 py-0.5 rounded text-gray-700">{channel.niche}</span>
                       <h4 className="font-sans font-bold text-sm text-gray-900 mt-1 truncate">{channel.title}</h4>
-                      <p className="text-[11px] text-gray-400 font-mono mt-0.5">{channel.subscribers.toLocaleString()} subscribers | {channel.status}</p>
+                      <p className="text-[11px] text-gray-500 font-mono mt-0.5">
+                        {channel.subscribers.toLocaleString()} subscribers | {channel.status} | {channel.monetized ? 'monetized' : channel.shorts ? 'shorts' : 'non-monetized'}
+                      </p>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-1.5 shrink-0">
+                  <div className="flex items-center space-x-1.5 shrink-0 self-end sm:self-auto">
+                    <button onClick={() => onSelectChannel(channel)} className="p-2 border border-gray-200 hover:border-emerald-300 hover:text-emerald-600 rounded-lg bg-white" title="View details"><Eye className="w-4 h-4" /></button>
                     <button onClick={() => editChannel(channel)} className="p-2 border border-gray-200 hover:border-blue-300 hover:text-blue-600 rounded-lg bg-white" title="Edit listing"><Edit className="w-4 h-4" /></button>
                     <button onClick={() => removeChannel(channel.id)} className="p-2 border border-gray-200 hover:border-red-300 hover:text-red-600 rounded-lg bg-white" title="Delete listing"><Trash2 className="w-4 h-4" /></button>
                   </div>
                 </div>
               ))}
+            </div>
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-gray-100 pt-4 mt-4">
+              <span className="text-xs text-gray-500">
+                Showing {paginatedChannels.length === 0 ? 0 : (channelPage - 1) * pageSize + 1}-{Math.min(channelPage * pageSize, sortedChannels.length)} of {sortedChannels.length}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setChannelPage(page => Math.max(1, page - 1))}
+                  disabled={channelPage === 1}
+                  className="inline-flex items-center gap-1 px-3 py-2 text-xs font-bold rounded-lg border border-gray-200 bg-gray-50 text-gray-700 disabled:opacity-40"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" /> Previous
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChannelPage(page => Math.min(channelTotalPages, page + 1))}
+                  disabled={channelPage === channelTotalPages}
+                  className="inline-flex items-center gap-1 px-3 py-2 text-xs font-bold rounded-lg border border-gray-200 bg-gray-50 text-gray-700 disabled:opacity-40"
+                >
+                  Next <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -351,7 +415,7 @@ export default function AdminPanel({ channels, testimonials, user, onBackToUserA
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-1 bg-white p-6 rounded-2xl border border-gray-100 shadow-md h-fit space-y-4">
             <h3 className="font-sans font-bold text-base text-gray-900 border-b border-gray-100 pb-3">Add Review</h3>
-            <form onSubmit={saveTestimonial} className="space-y-4 text-xs font-semibold">
+            <form onSubmit={saveTestimonial} className="space-y-4 text-xs font-semibold text-gray-700">
               <label className="block space-y-1">Customer Name<input value={testimonialName} onChange={(e) => setTestimonialName(e.target.value)} className={inputClass} /></label>
               <label className="block space-y-1">Role<input value={testimonialRole} onChange={(e) => setTestimonialRole(e.target.value)} className={inputClass} /></label>
               <label className="block space-y-1">Rating<select value={testimonialRating} onChange={(e) => setTestimonialRating(Number(e.target.value))} className={inputClass}><option value={5}>5 Stars</option><option value={4}>4 Stars</option><option value={3}>3 Stars</option></select></label>
@@ -362,9 +426,14 @@ export default function AdminPanel({ channels, testimonials, user, onBackToUserA
             </form>
           </div>
           <div className="lg:col-span-2 bg-white p-5 rounded-2xl border border-gray-100 shadow-md">
-            <h3 className="font-sans font-bold text-base text-gray-900 border-b border-gray-100 pb-3">Testimonials ({testimonials.length})</h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
+              <h3 className="font-sans font-bold text-base text-gray-900">Testimonials ({testimonials.length})</h3>
+              <span className="text-[10px] font-mono font-bold text-gray-500 bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-100">
+                Page {testimonialPage} / {testimonialTotalPages}
+              </span>
+            </div>
             <div className="divide-y divide-gray-100 mt-4 space-y-2 max-h-[520px] overflow-y-auto">
-              {testimonials.map((testimonial) => (
+              {paginatedTestimonials.map((testimonial) => (
                 <div key={testimonial.id} className="flex justify-between items-center py-3.5 gap-4 hover:bg-gray-50/60 px-2 rounded-xl">
                   <div>
                     <span className="text-[10px] font-mono font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded">{testimonial.role}</span>
@@ -376,6 +445,29 @@ export default function AdminPanel({ channels, testimonials, user, onBackToUserA
                   </button>
                 </div>
               ))}
+            </div>
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-gray-100 pt-4 mt-4">
+              <span className="text-xs text-gray-500">
+                Showing {paginatedTestimonials.length === 0 ? 0 : (testimonialPage - 1) * pageSize + 1}-{Math.min(testimonialPage * pageSize, sortedTestimonials.length)} of {sortedTestimonials.length}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTestimonialPage(page => Math.max(1, page - 1))}
+                  disabled={testimonialPage === 1}
+                  className="inline-flex items-center gap-1 px-3 py-2 text-xs font-bold rounded-lg border border-gray-200 bg-gray-50 text-gray-700 disabled:opacity-40"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" /> Previous
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTestimonialPage(page => Math.min(testimonialTotalPages, page + 1))}
+                  disabled={testimonialPage === testimonialTotalPages}
+                  className="inline-flex items-center gap-1 px-3 py-2 text-xs font-bold rounded-lg border border-gray-200 bg-gray-50 text-gray-700 disabled:opacity-40"
+                >
+                  Next <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { User } from '../types';
 import { 
-  Tv, 
   LogOut, 
   Menu, 
   X,

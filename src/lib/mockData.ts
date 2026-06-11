@@ -20,5 +20,7 @@ export const NICHES = [
   "Cooking & Food",
   "Health & Fitness",
   "Entertainment & Humor",
-  "Education & Science"
+  "Education & Science",
+  "Music",
+  "Cartoon & Animation"
 ];

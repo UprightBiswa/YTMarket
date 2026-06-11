@@ -160,7 +160,7 @@ export default function Header({ user, activeTab, setActiveTab, onNavigateWithFi
               </div>
             ) : (
               <div className="text-[10px] text-gray-400 font-mono italic text-center w-full py-2">
-                Secured Broker Channel
+                Verified Channel Marketplace
               </div>
             )}
           </div>

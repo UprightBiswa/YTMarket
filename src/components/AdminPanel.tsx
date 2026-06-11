@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft, Check, ChevronLeft, ChevronRight, Edit, Eye,
-  LogOut, MessageSquare, Plus, Save, Settings, Trash2, Tv, User
+  LogOut, MessageSquare, Plus, Save, Settings, Trash2, Tv, Upload, User, X as XIcon
 } from 'lucide-react';
 import { Channel, Testimonial, HomepageStats } from '../types';
 import {
@@ -9,7 +9,8 @@ import {
   addTestimonialListing, deleteTestimonialListing,
   checkIsAdminUser, loginWithEmailAndPassword, logoutUser,
   getAdminWhatsAppNumber, setAdminWhatsAppNumber,
-  getSocialLinks, saveSocialLinks,
+  getSocialLinks, saveSocialLinks, getSupportEmail,
+  uploadChannelImage, deleteChannelImage,
 } from '../lib/db';
 import { NICHES } from '../lib/mockData';
 
@@ -23,7 +24,6 @@ interface AdminPanelProps {
 }
 
 type AdminTab = 'channels' | 'testimonials' | 'settings';
-
 const inputClass = 'w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50/70 text-gray-900 outline-none focus:border-blue-500 focus:bg-white transition-colors';
 
 export default function AdminPanel({ channels, testimonials, user, onSelectChannel, onBackToUserApp }: AdminPanelProps) {
@@ -36,8 +36,9 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
   const [authLoading, setAuthLoading] = useState(false);
   const [notification, setNotification] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
-  // Settings state — loaded from db helpers
+  // Settings
   const [whatsapp, setWhatsapp] = useState(getAdminWhatsAppNumber());
+  const [supportEmail, setSupportEmailState] = useState(getSupportEmail());
   const [social, setSocial] = useState(getSocialLinks());
   const [savingSettings, setSavingSettings] = useState(false);
 
@@ -56,7 +57,9 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
   const [channelType, setChannelType] = useState<'monetized' | 'non-monetized' | 'shorts'>('monetized');
   const [featured, setFeatured] = useState(false);
   const [status, setStatus] = useState<'available' | 'sold'>('available');
-  const [imageUrl, setImageUrl] = useState('');
+  const [images, setImages] = useState<string[]>([]);
+  const [imageUrlInput, setImageUrlInput] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   // Testimonial form
   const [testimonialName, setTestimonialName] = useState('');
@@ -94,7 +97,7 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
     setEditingId(null); setTitle(''); setNiche(NICHES[0]); setYoutubeUrl('');
     setDescription(''); setSubscribers(0); setMonthlyViews(0); setMonthlyRevenue(0);
     setAudienceCountry('India'); setChannelAge('1 Year'); setChannelType('monetized');
-    setFeatured(false); setStatus('available'); setImageUrl('');
+    setFeatured(false); setStatus('available'); setImages([]); setImageUrlInput('');
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -110,10 +113,7 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
     }
   };
 
-  const handleLogout = async () => {
-    await logoutUser();
-    onBackToUserApp();
-  };
+  const handleLogout = async () => { await logoutUser(); onBackToUserApp(); };
 
   const editChannel = (ch: Channel) => {
     setEditingId(ch.id); setTitle(ch.title); setNiche(ch.niche);
@@ -123,9 +123,38 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
     setChannelAge(ch.channelAge);
     setChannelType(ch.shorts ? 'shorts' : ch.monetized ? 'monetized' : 'non-monetized');
     setFeatured(ch.featured); setStatus(ch.status);
-    setImageUrl(ch.images?.[0] || '');
+    setImages(ch.images || []); setImageUrlInput('');
     setActiveTab('channels');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    if (images.length + files.length > 5) { showNotice('Maximum 5 images allowed.', 'error'); return; }
+    setUploadingImage(true);
+    try {
+      const urls = await Promise.all(files.map(f => uploadChannelImage(f)));
+      setImages(prev => [...prev, ...urls].slice(0, 5));
+    } catch (err: any) {
+      showNotice(err?.message || 'Image upload failed.', 'error');
+    } finally {
+      setUploadingImage(false);
+      e.target.value = '';
+    }
+  };
+
+  const addImageUrl = () => {
+    const url = imageUrlInput.trim();
+    if (!url) return;
+    if (images.length >= 5) { showNotice('Maximum 5 images allowed.', 'error'); return; }
+    setImages(prev => [...prev, url].slice(0, 5));
+    setImageUrlInput('');
+  };
+
+  const removeImage = async (url: string) => {
+    setImages(prev => prev.filter(u => u !== url));
+    try { await deleteChannelImage(url); } catch {}
   };
 
   const saveChannel = async (e: React.FormEvent) => {
@@ -148,17 +177,12 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
         price: 0,
         whatsappNumber: getAdminWhatsAppNumber(),
         featured, status,
-        images: imageUrl.trim() ? [imageUrl.trim()] : [],
+        images,
         soldPrice: status === 'sold' ? 0 : undefined,
         soldDate: status === 'sold' ? new Date().toISOString().split('T')[0] : undefined,
       };
-      if (editingId) {
-        await updateChannelListing(editingId, payload);
-        showNotice('Channel updated.');
-      } else {
-        await addChannelListing(payload);
-        showNotice('Channel created.');
-      }
+      if (editingId) { await updateChannelListing(editingId, payload); showNotice('Channel updated.'); }
+      else { await addChannelListing(payload); showNotice('Channel created.'); }
       resetChannelForm();
       setChannelPage(1);
     } catch (err: any) {
@@ -171,15 +195,9 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
   const removeChannel = async (id: string) => {
     if (!window.confirm('Delete this channel listing permanently?')) return;
     setDeletingId(id);
-    try {
-      await deleteChannelListing(id);
-      setChannelPage(1);
-      showNotice('Channel deleted.');
-    } catch (err: any) {
-      showNotice(err?.message || 'Delete failed.', 'error');
-    } finally {
-      setDeletingId(null);
-    }
+    try { await deleteChannelListing(id); setChannelPage(1); showNotice('Channel deleted.'); }
+    catch (err: any) { showNotice(err?.message || 'Delete failed.', 'error'); }
+    finally { setDeletingId(null); }
   };
 
   const saveTestimonial = async (e: React.FormEvent) => {
@@ -207,22 +225,16 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
   const removeTestimonial = async (id: string) => {
     if (!window.confirm('Delete this testimonial?')) return;
     setDeletingId(id);
-    try {
-      await deleteTestimonialListing(id);
-      setTestimonialPage(1);
-      showNotice('Testimonial deleted.');
-    } catch (err: any) {
-      showNotice(err?.message || 'Delete failed.', 'error');
-    } finally {
-      setDeletingId(null);
-    }
+    try { await deleteTestimonialListing(id); setTestimonialPage(1); showNotice('Testimonial deleted.'); }
+    catch (err: any) { showNotice(err?.message || 'Delete failed.', 'error'); }
+    finally { setDeletingId(null); }
   };
 
   const saveSettings = async () => {
     setSavingSettings(true);
     try {
       setAdminWhatsAppNumber(whatsapp.trim());
-      saveSocialLinks(social);
+      saveSocialLinks(social, supportEmail.trim());
       showNotice('Settings saved.');
     } catch (err: any) {
       showNotice('Failed to save settings.', 'error');
@@ -231,7 +243,7 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
     }
   };
 
-  // ── LOGIN GATE ──────────────────────────────────────────────
+  // ── LOGIN GATE ──
   if (!checkIsAdminUser(user)) {
     return (
       <div className="max-w-sm mx-auto my-16 bg-white rounded-2xl border border-gray-200 shadow-2xl p-8 space-y-6" id="admin-auth-gate">
@@ -242,7 +254,6 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
           <h2 className="font-sans font-black text-xl text-gray-900">Admin Portal</h2>
           <p className="text-xs text-gray-500 font-sans">Restricted access. Authorised personnel only.</p>
         </div>
-
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider font-mono">Email</label>
@@ -252,17 +263,12 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
             <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider font-mono">Password</label>
             <input type="password" required autoComplete="current-password" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} placeholder="••••••••" className={inputClass} />
           </div>
-          {authError && (
-            <div className="text-[11px] text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-100 font-sans font-semibold">
-              {authError}
-            </div>
-          )}
-          <button type="submit" disabled={authLoading} className="w-full py-3 bg-slate-900 hover:bg-slate-800 active:scale-[0.98] text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all font-mono disabled:opacity-60 flex items-center justify-center gap-2">
+          {authError && <div className="text-[11px] text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-100 font-semibold">{authError}</div>}
+          <button type="submit" disabled={authLoading} className="w-full py-3 bg-slate-900 hover:bg-slate-800 active:scale-[0.98] text-white rounded-xl text-xs font-bold uppercase tracking-wider font-mono disabled:opacity-60 flex items-center justify-center gap-2 transition-all">
             {authLoading && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
             {authLoading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
-
         <button onClick={onBackToUserApp} className="w-full text-center text-xs text-gray-400 hover:text-gray-700 font-semibold flex items-center justify-center gap-1.5 transition-colors">
           <ArrowLeft className="w-3.5 h-3.5" /> Back to marketplace
         </button>
@@ -270,16 +276,12 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
     );
   }
 
-  // ── DASHBOARD ───────────────────────────────────────────────
+  // ── DASHBOARD ──
   return (
     <div className="space-y-6" id="admin-dashboard">
-
-      {/* Toast notification */}
       {notification && (
         <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-xl border text-xs font-semibold animate-fade-up ${
-          notification.type === 'error'
-            ? 'bg-red-50 text-red-700 border-red-200'
-            : 'bg-white text-gray-900 border-gray-200'
+          notification.type === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-white text-gray-900 border-gray-200'
         }`}>
           <Check className={`w-4 h-4 shrink-0 ${notification.type === 'error' ? 'text-red-500' : 'text-emerald-500'}`} />
           {notification.msg}
@@ -289,20 +291,14 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-700 pb-5">
         <div className="flex items-center gap-4">
-          {/* Admin profile card */}
           <div className="w-12 h-12 rounded-xl bg-slate-700 border border-slate-600 flex items-center justify-center overflow-hidden shrink-0">
             {user?.photoURL
-              ? <img src={user.photoURL} alt={user.displayName || 'Admin'} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-              : <User className="w-6 h-6 text-slate-300" />
-            }
+              ? <img src={user.photoURL} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              : <User className="w-6 h-6 text-slate-300" />}
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold bg-red-500/20 text-red-300 px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">Admin</span>
-            </div>
-            <h2 className="font-sans font-black text-xl tracking-tight text-white mt-0.5">
-              {user?.displayName || user?.email?.split('@')[0] || 'Admin'}
-            </h2>
+            <span className="text-[10px] font-bold bg-red-500/20 text-red-300 px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">Admin</span>
+            <h2 className="font-sans font-black text-xl tracking-tight text-white mt-0.5">{user?.displayName || user?.email?.split('@')[0] || 'Admin'}</h2>
             <p className="text-[11px] text-slate-400 font-mono">{user?.email}</p>
           </div>
         </div>
@@ -316,13 +312,13 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
         </div>
       </div>
 
-      {/* Stats bar */}
+      {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Total Listings', value: channels.length, color: 'text-blue-400' },
+          { label: 'Total', value: channels.length, color: 'text-blue-400' },
           { label: 'Available', value: channels.filter(c => c.status === 'available').length, color: 'text-emerald-400' },
           { label: 'Sold', value: channels.filter(c => c.status === 'sold').length, color: 'text-red-400' },
-          { label: 'Testimonials', value: testimonials.length, color: 'text-amber-400' },
+          { label: 'Reviews', value: testimonials.length, color: 'text-amber-400' },
         ].map(s => (
           <div key={s.label} className="bg-slate-800 rounded-xl p-3 border border-slate-700">
             <div className={`text-2xl font-black font-mono ${s.color}`}>{s.value}</div>
@@ -331,56 +327,48 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
         ))}
       </div>
 
-      {/* Tab switcher */}
-      <div className="bg-slate-800 p-1 rounded-xl inline-flex text-xs font-semibold font-sans gap-1">
+      {/* Tabs */}
+      <div className="bg-slate-800 p-1 rounded-xl inline-flex text-xs font-semibold gap-1">
         {([
-          { id: 'channels', label: 'Listings', icon: <Tv className="w-3.5 h-3.5" /> },
-          { id: 'testimonials', label: 'Testimonials', icon: <MessageSquare className="w-3.5 h-3.5" /> },
-          { id: 'settings', label: 'Settings', icon: <Settings className="w-3.5 h-3.5" /> },
-        ] as const).map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2 rounded-lg transition-all flex items-center gap-1.5 ${activeTab === tab.id ? 'bg-white text-gray-900 shadow-sm' : 'text-slate-300 hover:text-white'}`}
-          >
+          { id: 'channels' as const, label: 'Listings', icon: <Tv className="w-3.5 h-3.5" /> },
+          { id: 'testimonials' as const, label: 'Reviews', icon: <MessageSquare className="w-3.5 h-3.5" /> },
+          { id: 'settings' as const, label: 'Settings', icon: <Settings className="w-3.5 h-3.5" /> },
+        ]).map(tab => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+            className={`px-4 py-2 rounded-lg transition-all flex items-center gap-1.5 ${activeTab === tab.id ? 'bg-white text-gray-900 shadow-sm' : 'text-slate-300 hover:text-white'}`}>
             {tab.icon}{tab.label}
           </button>
         ))}
       </div>
 
-      {/* ── CHANNELS TAB ── */}
+      {/* ── CHANNELS ── */}
       {activeTab === 'channels' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm h-fit space-y-4">
             <h3 className="font-sans font-extrabold text-sm text-gray-900 flex items-center gap-1.5 border-b border-gray-100 pb-3">
-              <Plus className="w-4 h-4 text-blue-600" />
-              {editingId ? 'Edit Channel' : 'New Channel'}
+              <Plus className="w-4 h-4 text-blue-600" />{editingId ? 'Edit Channel' : 'New Channel'}
             </h3>
             <form onSubmit={saveChannel} className="space-y-3 text-xs font-semibold text-gray-700">
-              <label className="block space-y-1">
-                Channel Title *
+              <label className="block space-y-1">Channel Title *
                 <input value={title} onChange={e => setTitle(e.target.value)} className={inputClass} placeholder="e.g. Tech Reviews India" />
               </label>
               <div className="grid grid-cols-2 gap-3">
-                <label className="block space-y-1">
-                  Niche
+                <label className="block space-y-1">Niche
                   <select value={niche} onChange={e => setNiche(e.target.value)} className={inputClass}>
                     {NICHES.map(n => <option key={n} value={n}>{n}</option>)}
                   </select>
                 </label>
-                <label className="block space-y-1">
-                  Country
+                <label className="block space-y-1">Country
                   <input value={audienceCountry} onChange={e => setAudienceCountry(e.target.value)} className={inputClass} />
                 </label>
               </div>
-              <label className="block space-y-1">
-                YouTube URL *
+              <label className="block space-y-1">YouTube URL *
                 <input value={youtubeUrl} onChange={e => setYoutubeUrl(e.target.value)} className={inputClass} placeholder="https://youtube.com/@channel" />
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <label className="block space-y-1">Subscribers<input type="number" min={0} value={subscribers} onChange={e => setSubscribers(Number(e.target.value))} className={inputClass} /></label>
                 <label className="block space-y-1">Monthly Views<input type="number" min={0} value={monthlyViews} onChange={e => setMonthlyViews(Number(e.target.value))} className={inputClass} /></label>
-                <label className="block space-y-1">Monthly Revenue (₹)<input type="number" min={0} value={monthlyRevenue} onChange={e => setMonthlyRevenue(Number(e.target.value))} className={inputClass} /></label>
+                <label className="block space-y-1">Revenue (₹/mo)<input type="number" min={0} value={monthlyRevenue} onChange={e => setMonthlyRevenue(Number(e.target.value))} className={inputClass} /></label>
                 <label className="block space-y-1">Channel Age<input value={channelAge} onChange={e => setChannelAge(e.target.value)} className={inputClass} placeholder="2 Years" /></label>
               </div>
               <div className="grid grid-cols-3 gap-1.5">
@@ -391,18 +379,45 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
                   </button>
                 ))}
               </div>
-              <label className="block space-y-1">
-                Image URL
-                <input value={imageUrl} onChange={e => setImageUrl(e.target.value)} className={inputClass} placeholder="https://..." />
-              </label>
-              <label className="block space-y-1">
-                Description *
+
+              {/* Images section */}
+              <div className="space-y-2">
+                <span className="text-[10px] font-bold text-gray-500 uppercase font-mono">Images ({images.length}/5)</span>
+                {images.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2">
+                    {images.map((url, i) => (
+                      <div key={i} className="relative aspect-video rounded-lg overflow-hidden bg-gray-100 border group">
+                        <img src={url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        <button type="button" onClick={() => removeImage(url)}
+                          className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <XIcon className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {images.length < 5 && (
+                  <label className={`flex items-center justify-center gap-2 w-full py-2.5 border-2 border-dashed border-gray-200 rounded-lg text-[11px] font-bold text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors cursor-pointer ${uploadingImage ? 'opacity-50 pointer-events-none' : ''}`}>
+                    {uploadingImage
+                      ? <><span className="w-3.5 h-3.5 border-2 border-blue-400 border-t-blue-600 rounded-full animate-spin" /> Uploading...</>
+                      : <><Upload className="w-3.5 h-3.5" /> Upload from device</>}
+                    <input type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden" onChange={handleImageUpload} disabled={uploadingImage} />
+                  </label>
+                )}
+                {images.length < 5 && (
+                  <div className="flex gap-1.5">
+                    <input value={imageUrlInput} onChange={e => setImageUrlInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addImageUrl())} className={inputClass} placeholder="Or paste image URL + Enter" />
+                    <button type="button" onClick={addImageUrl} className="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold shrink-0">Add</button>
+                  </div>
+                )}
+              </div>
+
+              <label className="block space-y-1">Description *
                 <textarea rows={3} value={description} onChange={e => setDescription(e.target.value)} className={inputClass} />
               </label>
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-2 cursor-pointer text-gray-700">
-                  <input type="checkbox" checked={featured} onChange={e => setFeatured(e.target.checked)} className="rounded" />
-                  Featured
+                  <input type="checkbox" checked={featured} onChange={e => setFeatured(e.target.checked)} className="rounded" />Featured
                 </label>
                 <select value={status} onChange={e => setStatus(e.target.value as any)} className="border border-gray-200 rounded-lg p-2 text-xs bg-gray-50 text-gray-900 outline-none">
                   <option value="available">Available</option>
@@ -410,11 +425,7 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
                 </select>
               </div>
               <div className="flex gap-2 pt-1">
-                {editingId && (
-                  <button type="button" onClick={resetChannelForm} className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 active:scale-95 text-gray-700 rounded-xl text-xs font-bold transition-all">
-                    Cancel
-                  </button>
-                )}
+                {editingId && <button type="button" onClick={resetChannelForm} className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 active:scale-95 text-gray-700 rounded-xl text-xs font-bold transition-all">Cancel</button>}
                 <button type="submit" disabled={saveLoading} className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl flex items-center justify-center gap-1.5 text-xs font-bold transition-all disabled:opacity-60">
                   {saveLoading ? <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                   {saveLoading ? (editingId ? 'Updating...' : 'Saving...') : (editingId ? 'Update' : 'Save Listing')}
@@ -425,15 +436,13 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
 
           <div className="lg:col-span-2 bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-2">
-              <div>
-                <h3 className="font-sans font-extrabold text-sm text-gray-900">All Listings ({channels.length})</h3>
-                <p className="text-[11px] text-gray-400 mt-0.5">Page {channelPage} / {channelTotalPages}</p>
-              </div>
+              <h3 className="font-sans font-extrabold text-sm text-gray-900">All Listings ({channels.length})</h3>
+              <span className="text-[10px] text-gray-400 font-mono">Page {channelPage}/{channelTotalPages}</span>
             </div>
             {paginatedChannels.length === 0 ? (
               <div className="text-center py-16 text-gray-400">
                 <Tv className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                <p className="text-xs font-mono">No listings yet. Create your first channel above.</p>
+                <p className="text-xs font-mono">No listings yet. Create your first channel.</p>
               </div>
             ) : (
               <div className="divide-y divide-gray-50">
@@ -443,17 +452,16 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
                       <div className="w-11 h-11 rounded-lg bg-gray-100 border overflow-hidden shrink-0">
                         {ch.images?.[0]
                           ? <img src={ch.images[0]} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                          : <div className="w-full h-full flex items-center justify-center"><Tv className="w-4 h-4 text-gray-300" /></div>
-                        }
+                          : <div className="w-full h-full flex items-center justify-center"><Tv className="w-4 h-4 text-gray-300" /></div>}
                       </div>
                       <div className="min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
+                        <div className="flex items-center gap-1 flex-wrap">
                           <span className="text-[10px] font-bold bg-gray-100 px-1.5 py-0.5 rounded text-gray-600 font-mono">{ch.niche}</span>
                           <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded font-mono ${ch.status === 'sold' ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-700'}`}>{ch.status}</span>
-                          {ch.featured && <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-mono">featured</span>}
+                          {ch.featured && <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-mono">★</span>}
                         </div>
-                        <h4 className="font-sans font-bold text-sm text-gray-900 truncate mt-0.5">{ch.title}</h4>
-                        <p className="text-[11px] text-gray-400 font-mono">{ch.subscribers.toLocaleString()} subs · {ch.monetized ? 'monetized' : ch.shorts ? 'shorts' : 'non-monetized'}</p>
+                        <h4 className="font-bold text-sm text-gray-900 truncate mt-0.5">{ch.title}</h4>
+                        <p className="text-[11px] text-gray-400 font-mono">{ch.subscribers.toLocaleString()} subs · {ch.images?.length || 0} imgs</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
@@ -482,42 +490,37 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
         </div>
       )}
 
-      {/* ── TESTIMONIALS TAB ── */}
+      {/* ── TESTIMONIALS ── */}
       {activeTab === 'testimonials' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm h-fit space-y-4">
-            <h3 className="font-sans font-extrabold text-sm text-gray-900 border-b border-gray-100 pb-3 flex items-center gap-1.5">
-              <Plus className="w-4 h-4 text-blue-600" /> Add Testimonial
+            <h3 className="font-extrabold text-sm text-gray-900 border-b border-gray-100 pb-3 flex items-center gap-1.5">
+              <Plus className="w-4 h-4 text-blue-600" /> Add Review
             </h3>
             <form onSubmit={saveTestimonial} className="space-y-3 text-xs font-semibold text-gray-700">
               <label className="block space-y-1">Customer Name *<input value={testimonialName} onChange={e => setTestimonialName(e.target.value)} className={inputClass} placeholder="John Doe" /></label>
               <label className="block space-y-1">Role<input value={testimonialRole} onChange={e => setTestimonialRole(e.target.value)} className={inputClass} placeholder="Verified Buyer" /></label>
-              <label className="block space-y-1">
-                Rating
+              <label className="block space-y-1">Rating
                 <select value={testimonialRating} onChange={e => setTestimonialRating(Number(e.target.value))} className={inputClass}>
                   <option value={5}>★★★★★ (5)</option>
                   <option value={4}>★★★★☆ (4)</option>
                   <option value={3}>★★★☆☆ (3)</option>
                 </select>
               </label>
-              <label className="block space-y-1">Review *<textarea rows={4} value={testimonialReview} onChange={e => setTestimonialReview(e.target.value)} className={inputClass} placeholder="Share the customer's experience..." /></label>
+              <label className="block space-y-1">Review *<textarea rows={4} value={testimonialReview} onChange={e => setTestimonialReview(e.target.value)} className={inputClass} placeholder="Customer experience..." /></label>
               <button type="submit" disabled={testimonialLoading} className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl flex items-center justify-center gap-1.5 text-xs font-bold transition-all disabled:opacity-60">
                 {testimonialLoading ? <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <MessageSquare className="w-3.5 h-3.5" />}
                 {testimonialLoading ? 'Adding...' : 'Add Testimonial'}
               </button>
             </form>
           </div>
-
           <div className="lg:col-span-2 bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-2">
-              <h3 className="font-sans font-extrabold text-sm text-gray-900">Testimonials ({testimonials.length})</h3>
-              <span className="text-[10px] text-gray-400 font-mono">Page {testimonialPage} / {testimonialTotalPages}</span>
+              <h3 className="font-extrabold text-sm text-gray-900">Reviews ({testimonials.length})</h3>
+              <span className="text-[10px] text-gray-400 font-mono">Page {testimonialPage}/{testimonialTotalPages}</span>
             </div>
             {paginatedTestimonials.length === 0 ? (
-              <div className="text-center py-16 text-gray-400">
-                <MessageSquare className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                <p className="text-xs font-mono">No testimonials yet.</p>
-              </div>
+              <div className="text-center py-16 text-gray-400"><MessageSquare className="w-10 h-10 mx-auto mb-3 opacity-30" /><p className="text-xs font-mono">No reviews yet.</p></div>
             ) : (
               <div className="divide-y divide-gray-50">
                 {paginatedTestimonials.map(t => (
@@ -526,11 +529,11 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-black text-gray-900">{t.name}</span>
                         <span className="text-[10px] font-bold bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-mono">{t.role}</span>
-                        <span className="text-xs text-amber-400 font-bold">{'★'.repeat(t.rating)}</span>
+                        <span className="text-xs text-amber-400">{'★'.repeat(t.rating)}</span>
                       </div>
-                      <p className="text-xs text-gray-500 mt-1 line-clamp-2 font-sans">{t.review}</p>
+                      <p className="text-xs text-gray-500 mt-1 line-clamp-2">{t.review}</p>
                     </div>
-                    <button onClick={() => removeTestimonial(t.id)} disabled={deletingId === t.id} className="p-2 bg-red-100 hover:bg-red-200 text-red-700 active:scale-90 rounded-lg shrink-0 transition-all disabled:opacity-50">
+                    <button onClick={() => removeTestimonial(t.id)} disabled={deletingId === t.id} className="p-2 bg-red-100 hover:bg-red-200 text-red-700 active:scale-90 rounded-lg shrink-0 disabled:opacity-50">
                       {deletingId === t.id ? <span className="w-3.5 h-3.5 border-2 border-red-400 border-t-red-700 rounded-full animate-spin block" /> : <Trash2 className="w-3.5 h-3.5" />}
                     </button>
                   </div>
@@ -540,32 +543,31 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
             <div className="flex items-center justify-between border-t border-gray-100 pt-4 mt-3">
               <span className="text-xs text-gray-400">{sortedTestimonials.length === 0 ? '0' : `${(testimonialPage - 1) * pageSize + 1}–${Math.min(testimonialPage * pageSize, sortedTestimonials.length)}`} of {sortedTestimonials.length}</span>
               <div className="flex gap-2">
-                <button onClick={() => setTestimonialPage(p => Math.max(1, p - 1))} disabled={testimonialPage === 1} className="px-3 py-1.5 text-xs font-bold rounded-lg border border-gray-200 bg-gray-50 text-gray-600 disabled:opacity-40 flex items-center gap-1">
-                  <ChevronLeft className="w-3.5 h-3.5" /> Prev
-                </button>
-                <button onClick={() => setTestimonialPage(p => Math.min(testimonialTotalPages, p + 1))} disabled={testimonialPage === testimonialTotalPages} className="px-3 py-1.5 text-xs font-bold rounded-lg border border-gray-200 bg-gray-50 text-gray-600 disabled:opacity-40 flex items-center gap-1">
-                  Next <ChevronRight className="w-3.5 h-3.5" />
-                </button>
+                <button onClick={() => setTestimonialPage(p => Math.max(1, p - 1))} disabled={testimonialPage === 1} className="px-3 py-1.5 text-xs font-bold rounded-lg border border-gray-200 bg-gray-50 text-gray-600 disabled:opacity-40 flex items-center gap-1"><ChevronLeft className="w-3.5 h-3.5" /> Prev</button>
+                <button onClick={() => setTestimonialPage(p => Math.min(testimonialTotalPages, p + 1))} disabled={testimonialPage === testimonialTotalPages} className="px-3 py-1.5 text-xs font-bold rounded-lg border border-gray-200 bg-gray-50 text-gray-600 disabled:opacity-40 flex items-center gap-1">Next <ChevronRight className="w-3.5 h-3.5" /></button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── SETTINGS TAB ── */}
+      {/* ── SETTINGS ── */}
       {activeTab === 'settings' && (
         <div className="max-w-2xl space-y-6">
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-5">
-            <h3 className="font-sans font-extrabold text-sm text-gray-900 border-b border-gray-100 pb-3 flex items-center gap-1.5">
-              <Settings className="w-4 h-4 text-gray-600" /> App & Contact Settings
+            <h3 className="font-extrabold text-sm text-gray-900 border-b border-gray-100 pb-3 flex items-center gap-1.5">
+              <Settings className="w-4 h-4 text-gray-600" /> Contact & Social Settings
             </h3>
-
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-gray-500 uppercase font-mono tracking-wider">WhatsApp Contact Number</label>
+              <label className="text-[10px] font-bold text-gray-500 uppercase font-mono tracking-wider">WhatsApp Number</label>
               <input value={whatsapp} onChange={e => setWhatsapp(e.target.value)} className={inputClass} placeholder="+91XXXXXXXXXX" />
-              <p className="text-[10px] text-gray-400">Used for all inquiry buttons across the site.</p>
+              <p className="text-[10px] text-gray-400">Used for all WhatsApp inquiry buttons sitewide.</p>
             </div>
-
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-gray-500 uppercase font-mono tracking-wider">Support Email</label>
+              <input type="email" value={supportEmail} onChange={e => setSupportEmailState(e.target.value)} className={inputClass} placeholder="support@yourdomain.com" />
+              <p className="text-[10px] text-gray-400">Shown in footer support section.</p>
+            </div>
             <div className="space-y-3">
               <label className="text-[10px] font-bold text-gray-500 uppercase font-mono tracking-wider">Social Media Links</label>
               {([
@@ -575,42 +577,31 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
               ]).map(({ key, label, placeholder }) => (
                 <div key={key} className="space-y-1">
                   <label className="text-[10px] font-semibold text-gray-500 font-mono">{label}</label>
-                  <input
-                    value={social[key]}
-                    onChange={e => setSocial(prev => ({ ...prev, [key]: e.target.value }))}
-                    className={inputClass}
-                    placeholder={placeholder}
-                  />
+                  <input value={social[key]} onChange={e => setSocial(prev => ({ ...prev, [key]: e.target.value }))} className={inputClass} placeholder={placeholder} />
                 </div>
               ))}
             </div>
-
-            <button
-              onClick={saveSettings}
-              disabled={savingSettings}
-              className="w-full py-3 bg-slate-900 hover:bg-slate-800 active:scale-[0.98] text-white rounded-xl text-xs font-bold transition-all disabled:opacity-60 flex items-center justify-center gap-2"
-            >
+            <button onClick={saveSettings} disabled={savingSettings} className="w-full py-3 bg-slate-900 hover:bg-slate-800 active:scale-[0.98] text-white rounded-xl text-xs font-bold transition-all disabled:opacity-60 flex items-center justify-center gap-2">
               {savingSettings ? <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save className="w-3.5 h-3.5" />}
               {savingSettings ? 'Saving...' : 'Save Settings'}
             </button>
           </div>
 
-          {/* Privacy & Terms info */}
-          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-            <h3 className="font-sans font-extrabold text-sm text-gray-900 border-b border-gray-100 pb-3">Legal Pages</h3>
+          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-3">
+            <h3 className="font-extrabold text-sm text-gray-900 border-b border-gray-100 pb-3">Add New Admin</h3>
             <p className="text-xs text-gray-500 leading-relaxed">
-              Privacy Policy and Terms of Service links appear in the site footer. Update the footer component to point to your hosted legal pages.
+              To add a new admin account:
             </p>
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                <p className="font-bold text-gray-700">Privacy Policy</p>
-                <p className="text-gray-400 mt-0.5">Footer → Privacy link</p>
-              </div>
-              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                <p className="font-bold text-gray-700">Terms of Service</p>
-                <p className="text-gray-400 mt-0.5">Footer → Terms link</p>
-              </div>
-            </div>
+            <ol className="text-xs text-gray-600 space-y-1.5 list-decimal list-inside">
+              <li>Go to Supabase Dashboard → Authentication → Users → Add User</li>
+              <li>Create the user with their email and password</li>
+              <li>Run this SQL in Supabase SQL Editor:</li>
+            </ol>
+            <pre className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-[11px] font-mono text-gray-700 overflow-x-auto whitespace-pre-wrap">
+{`INSERT INTO public.admins (email, full_name)
+VALUES ('newadmin@gmail.com', 'Admin Name')
+ON CONFLICT (email) DO NOTHING;`}
+            </pre>
           </div>
         </div>
       )}

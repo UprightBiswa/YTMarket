@@ -148,24 +148,26 @@ export const fetchAdminWhatsAppNumber = async (): Promise<string> => {
   if (isSupabaseConfigured && supabase) {
     const { data, error } = await supabase
       .from('app_settings')
-      .select('whatsapp_number, whatsapp_channel_url, instagram_url, facebook_url')
+      .select('whatsapp_number, whatsapp_channel_url, instagram_url, facebook_url, support_email')
       .eq('id', 1)
       .maybeSingle();
     if (!error && data) {
       if (data.whatsapp_number) localStorage.setItem('yt_admin_whatsapp', data.whatsapp_number);
-      if (data.instagram_url || data.whatsapp_channel_url || data.facebook_url) {
-        localStorage.setItem('yt_social_links', JSON.stringify({
-          instagram: data.instagram_url || '',
-          facebook: data.facebook_url || '',
-          whatsappChannel: data.whatsapp_channel_url || '',
-        }));
-        window.dispatchEvent(new Event('storage'));
-      }
+      if (data.support_email) localStorage.setItem('yt_support_email', data.support_email);
+      localStorage.setItem('yt_social_links', JSON.stringify({
+        instagram: data.instagram_url || '',
+        facebook: data.facebook_url || '',
+        whatsappChannel: data.whatsapp_channel_url || '',
+      }));
+      window.dispatchEvent(new Event('storage'));
       return data.whatsapp_number || '';
     }
   }
   return getAdminWhatsAppNumber();
 };
+
+export const getSupportEmail = (): string =>
+  localStorage.getItem('yt_support_email') || 'supportbuysellmarket@gmail.com';
 
 export interface SocialLinks {
   instagram: string;
@@ -188,8 +190,9 @@ export const getSocialLinks = (): SocialLinks => {
   return { instagram: '', facebook: '', whatsappChannel: '' };
 };
 
-export const saveSocialLinks = (links: SocialLinks): void => {
+export const saveSocialLinks = (links: SocialLinks, supportEmail?: string): void => {
   localStorage.setItem('yt_social_links', JSON.stringify(links));
+  if (supportEmail !== undefined) localStorage.setItem('yt_support_email', supportEmail);
   if (isSupabaseConfigured && supabase) {
     supabase.from('app_settings')
       .upsert({
@@ -197,11 +200,39 @@ export const saveSocialLinks = (links: SocialLinks): void => {
         instagram_url: links.instagram.trim(),
         facebook_url: links.facebook.trim(),
         whatsapp_channel_url: links.whatsappChannel.trim(),
+        ...(supportEmail !== undefined ? { support_email: supportEmail.trim() } : {}),
         updated_at: new Date().toISOString(),
       })
       .then(({ error }) => { if (error) console.error('[db] save social links error:', error.message); });
   }
   window.dispatchEvent(new Event('storage'));
+};
+
+// ----------------------------------------------------
+// IMAGE UPLOAD (Supabase Storage - free 1GB)
+// ----------------------------------------------------
+export const uploadChannelImage = async (file: File): Promise<string> => {
+  if (!isSupabaseConfigured || !supabase) throw new Error('Database not configured.');
+  const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+  const path = `channels/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const { error } = await supabase.storage.from('channel-images').upload(path, file, {
+    cacheControl: '3600',
+    upsert: false,
+    contentType: file.type,
+  });
+  if (error) throw new Error(error.message);
+  const { data } = supabase.storage.from('channel-images').getPublicUrl(path);
+  return data.publicUrl;
+};
+
+export const deleteChannelImage = async (url: string): Promise<void> => {
+  if (!isSupabaseConfigured || !supabase) return;
+  // Extract path from public URL
+  const marker = '/channel-images/';
+  const idx = url.indexOf(marker);
+  if (idx === -1) return;
+  const path = url.slice(idx + marker.length);
+  await supabase.storage.from('channel-images').remove([path]);
 };
 
 // ----------------------------------------------------

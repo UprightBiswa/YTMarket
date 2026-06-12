@@ -54,12 +54,13 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
   const [monthlyRevenue, setMonthlyRevenue] = useState(0);
   const [audienceCountry, setAudienceCountry] = useState('India');
   const [channelAge, setChannelAge] = useState('1 Year');
-  const [channelType, setChannelType] = useState<'monetized' | 'non-monetized' | 'shorts'>('monetized');
+  const [channelType, setChannelType] = useState<'monetized' | 'non-monetized' | 'shorts-monetized' | 'shorts-non-monetized'>('monetized');
   const [featured, setFeatured] = useState(false);
   const [status, setStatus] = useState<'available' | 'sold'>('available');
   const [images, setImages] = useState<string[]>([]);
   const [imageUrlInput, setImageUrlInput] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [customNiche, setCustomNiche] = useState('');
 
   // Testimonial form
   const [testimonialName, setTestimonialName] = useState('');
@@ -97,7 +98,7 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
     setEditingId(null); setTitle(''); setNiche(NICHES[0]); setYoutubeUrl('');
     setDescription(''); setSubscribers(0); setMonthlyViews(0); setMonthlyRevenue(0);
     setAudienceCountry('India'); setChannelAge('1 Year'); setChannelType('monetized');
-    setFeatured(false); setStatus('available'); setImages([]); setImageUrlInput('');
+    setFeatured(false); setStatus('available'); setImages([]); setImageUrlInput(''); setCustomNiche('');
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -121,7 +122,13 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
     setSubscribers(ch.subscribers); setMonthlyViews(ch.monthlyViews);
     setMonthlyRevenue(ch.monthlyRevenue); setAudienceCountry(ch.audienceCountry);
     setChannelAge(ch.channelAge);
-    setChannelType(ch.shorts ? 'shorts' : ch.monetized ? 'monetized' : 'non-monetized');
+    if (ch.shorts && ch.monetized) setChannelType('shorts-monetized');
+    else if (ch.shorts && !ch.monetized) setChannelType('shorts-non-monetized');
+    else if (ch.monetized) setChannelType('monetized');
+    else setChannelType('non-monetized');
+    // Handle custom niche
+    if (!NICHES.includes(ch.niche)) { setNiche('Others'); setCustomNiche(ch.niche); }
+    else { setNiche(ch.niche); setCustomNiche(''); }
     setFeatured(ch.featured); setStatus(ch.status);
     setImages(ch.images || []); setImageUrlInput('');
     setActiveTab('channels');
@@ -165,15 +172,15 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
     setSaveLoading(true);
     try {
       const payload = {
-        title: title.trim(), niche, youtubeUrl: youtubeUrl.trim(),
+        title: title.trim(), niche: niche === 'Others' ? (customNiche.trim() || 'Others') : niche, youtubeUrl: youtubeUrl.trim(),
         description: description.trim(),
         subscribers: Number(subscribers) || 0,
         monthlyViews: Number(monthlyViews) || 0,
         monthlyRevenue: Number(monthlyRevenue) || 0,
         audienceCountry: audienceCountry.trim() || 'India',
         channelAge: channelAge.trim() || '1 Year',
-        monetized: channelType === 'monetized',
-        shorts: channelType === 'shorts',
+        monetized: channelType === 'monetized' || channelType === 'shorts-monetized',
+        shorts: channelType === 'shorts-monetized' || channelType === 'shorts-non-monetized',
         price: 0,
         whatsappNumber: getAdminWhatsAppNumber(),
         featured, status,
@@ -354,10 +361,16 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <label className="block space-y-1">Niche
-                  <select value={niche} onChange={e => setNiche(e.target.value)} className={inputClass}>
+                  <select value={niche} onChange={e => { setNiche(e.target.value); if (e.target.value !== 'Others') setCustomNiche(''); }} className={inputClass}>
                     {NICHES.map(n => <option key={n} value={n}>{n}</option>)}
+                    <option value="Others">Others (custom)</option>
                   </select>
                 </label>
+                {niche === 'Others' && (
+                  <label className="block space-y-1">Custom Niche *
+                    <input value={customNiche} onChange={e => setCustomNiche(e.target.value)} className={inputClass} placeholder="e.g. Motivation, Sports..." />
+                  </label>
+                )}
                 <label className="block space-y-1">Country
                   <input value={audienceCountry} onChange={e => setAudienceCountry(e.target.value)} className={inputClass} />
                 </label>
@@ -371,11 +384,20 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
                 <label className="block space-y-1">Revenue (₹/mo)<input type="number" min={0} value={monthlyRevenue} onChange={e => setMonthlyRevenue(Number(e.target.value))} className={inputClass} /></label>
                 <label className="block space-y-1">Channel Age<input value={channelAge} onChange={e => setChannelAge(e.target.value)} className={inputClass} placeholder="2 Years" /></label>
               </div>
-              <div className="grid grid-cols-3 gap-1.5">
-                {(['monetized', 'non-monetized', 'shorts'] as const).map(t => (
-                  <button key={t} type="button" onClick={() => setChannelType(t)}
-                    className={`py-2 px-1 rounded-lg text-[10px] font-bold uppercase transition-all ${channelType === t ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                    {t}
+              <div className="grid grid-cols-2 gap-1.5">
+                {([
+                  { val: 'monetized', label: 'Monetized', color: 'emerald' },
+                  { val: 'non-monetized', label: 'Non-Monetized', color: 'gray' },
+                  { val: 'shorts-monetized', label: 'Shorts ✦ Monetized', color: 'blue' },
+                  { val: 'shorts-non-monetized', label: 'Shorts ✦ Non-Mon.', color: 'purple' },
+                ] as const).map(t => (
+                  <button key={t.val} type="button" onClick={() => setChannelType(t.val)}
+                    className={`py-2 px-2 rounded-lg text-[10px] font-bold transition-all text-center leading-tight ${
+                      channelType === t.val
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}>
+                    {t.label}
                   </button>
                 ))}
               </div>
@@ -461,7 +483,7 @@ export default function AdminPanel({ channels, testimonials, user, onSelectChann
                           {ch.featured && <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-mono">★</span>}
                         </div>
                         <h4 className="font-bold text-sm text-gray-900 truncate mt-0.5">{ch.title}</h4>
-                        <p className="text-[11px] text-gray-400 font-mono">{ch.subscribers.toLocaleString()} subs · {ch.images?.length || 0} imgs</p>
+                        <p className="text-[11px] text-gray-400 font-mono">{ch.subscribers.toLocaleString()} subs · {ch.shorts && ch.monetized ? 'shorts monetized' : ch.shorts ? 'shorts' : ch.monetized ? 'monetized' : 'non-monetized'} · {ch.images?.length || 0} imgs</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">

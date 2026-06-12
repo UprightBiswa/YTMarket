@@ -508,7 +508,9 @@ export default function BrowseChannels({
                           </div>
                           <div className="flex items-center gap-1.5 text-gray-500">
                             <CheckCircle className="w-3.5 h-3.5 text-gray-400" />
-                            <span>Monetized: <strong className="text-gray-900 font-semibold">{chan.monetized ? "Yes" : "No"}</strong></span>
+                            <span>Type: <strong className="text-gray-900 font-semibold">
+                              {chan.shorts && chan.monetized ? 'Shorts ✦ Mon.' : chan.shorts ? 'Shorts' : chan.monetized ? 'Monetized' : 'Non-Mon.'}
+                            </strong></span>
                           </div>
                           <div className="flex items-center gap-1.5 text-gray-500">
                             <Globe className="w-3.5 h-3.5 text-gray-400" />

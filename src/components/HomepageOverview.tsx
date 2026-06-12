@@ -243,46 +243,58 @@ export default function HomepageOverview({
 
       {/* Testimonials marquee */}
       {testimonials.length > 0 && (
-        <section className="space-y-6 overflow-hidden">
+        <section className="space-y-4 overflow-hidden">
           <div className="text-center max-w-xl mx-auto">
             <span className="text-[10px] font-bold bg-blue-100 text-blue-800 px-2.5 py-1 rounded-full uppercase tracking-wider font-mono">Broker Credibility</span>
             <h3 className="font-sans font-black text-2xl tracking-tight text-gray-900 mt-2">Success Stories & Testimonials</h3>
             <p className="text-xs text-gray-500 font-sans mt-0.5">Real opinions from our buyers and sellers around the world.</p>
           </div>
-          <div className="overflow-hidden">
-            <div className="flex gap-4 animate-marquee-left w-max">
-              {[...testimonials, ...testimonials].map((t, i) => (
-                <div key={`l-${i}`} className="w-72 shrink-0 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between space-y-3">
-                  <div>
-                    <div className="text-amber-400 text-sm">{'★'.repeat(t.rating)}{'☆'.repeat(5 - t.rating)}</div>
-                    <p className="text-xs italic text-gray-600 leading-relaxed mt-2 line-clamp-2">&ldquo;{t.review}&rdquo;</p>
-                  </div>
-                  <div className="pt-3 border-t border-gray-50 flex items-center justify-between">
-                    <span className="font-bold text-xs text-gray-900">{t.name}</span>
-                    <span className="text-[10px] text-blue-600 font-mono font-bold bg-blue-50 px-2 py-0.5 rounded">{t.role || 'Verified Customer'}</span>
+
+          {/* Always duplicate enough copies so the strip is wide enough to scroll smoothly */}
+          {(() => {
+            // Need at least 8 cards per row so animation looks continuous on any screen
+            const minCopies = Math.ceil(8 / Math.max(testimonials.length, 1));
+            const strip = Array.from({ length: minCopies * 2 }, (_, i) => testimonials[i % testimonials.length]);
+            return (
+              <>
+                {/* Row 1 — scroll left */}
+                <div className="overflow-hidden">
+                  <div className="flex gap-4 animate-marquee-left" style={{ width: 'max-content' }}>
+                    {strip.map((t, i) => (
+                      <div key={`l-${i}`} className="testi-card shrink-0 bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between space-y-3">
+                        <div>
+                          <div className="text-amber-400 text-base tracking-wide">{'★'.repeat(t.rating)}{'☆'.repeat(5 - t.rating)}</div>
+                          <p className="text-xs italic text-gray-600 leading-relaxed mt-2 line-clamp-3">&ldquo;{t.review}&rdquo;</p>
+                        </div>
+                        <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+                          <span className="font-bold text-xs text-gray-900 truncate">{t.name}</span>
+                          <span className="text-[10px] text-blue-600 font-mono font-bold bg-blue-50 px-2 py-0.5 rounded shrink-0">{t.role || 'Verified Customer'}</span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-          {testimonials.length > 1 && (
-            <div className="overflow-hidden">
-              <div className="flex gap-4 animate-marquee-right w-max">
-                {[...testimonials, ...testimonials].reverse().map((t, i) => (
-                  <div key={`r-${i}`} className="w-72 shrink-0 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between space-y-3">
-                    <div>
-                      <div className="text-amber-400 text-sm">{'★'.repeat(t.rating)}{'☆'.repeat(5 - t.rating)}</div>
-                      <p className="text-xs italic text-gray-600 leading-relaxed mt-2 line-clamp-2">&ldquo;{t.review}&rdquo;</p>
-                    </div>
-                    <div className="pt-3 border-t border-gray-50 flex items-center justify-between">
-                      <span className="font-bold text-xs text-gray-900">{t.name}</span>
-                      <span className="text-[10px] text-blue-600 font-mono font-bold bg-blue-50 px-2 py-0.5 rounded">{t.role || 'Verified Customer'}</span>
-                    </div>
+
+                {/* Row 2 — scroll right (reversed) */}
+                <div className="overflow-hidden">
+                  <div className="flex gap-4 animate-marquee-right" style={{ width: 'max-content' }}>
+                    {[...strip].reverse().map((t, i) => (
+                      <div key={`r-${i}`} className="testi-card shrink-0 bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between space-y-3">
+                        <div>
+                          <div className="text-amber-400 text-base tracking-wide">{'★'.repeat(t.rating)}{'☆'.repeat(5 - t.rating)}</div>
+                          <p className="text-xs italic text-gray-600 leading-relaxed mt-2 line-clamp-3">&ldquo;{t.review}&rdquo;</p>
+                        </div>
+                        <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+                          <span className="font-bold text-xs text-gray-900 truncate">{t.name}</span>
+                          <span className="text-[10px] text-blue-600 font-mono font-bold bg-blue-50 px-2 py-0.5 rounded shrink-0">{t.role || 'Verified Customer'}</span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                </div>
+              </>
+            );
+          })()}
         </section>
       )}
 
